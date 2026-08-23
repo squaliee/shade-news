@@ -1,0 +1,2363 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shade News Bot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        
+        body, html { 
+            margin: 0; padding: 0; height: 100vh; width: 100vw; 
+            background-color: #1a1a1a; font-family: 'Inter', sans-serif; color: white; 
+            overflow: hidden; 
+        }
+
+        /* Анімація появи питання */
+        @keyframes questionSlideIn {
+            from { opacity: 0; transform: translateX(40px) scale(0.97); }
+            to   { opacity: 1; transform: translateX(0)   scale(1); }
+        }
+        @keyframes questionSlideOut {
+            from { opacity: 1; transform: translateX(0)    scale(1); }
+            to   { opacity: 0; transform: translateX(-40px) scale(0.97); }
+        }
+        .question-anim { animation: questionSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+        .question-exit { animation: questionSlideOut 0.25s cubic-bezier(0.55, 0, 1, 0.45) both; }
+
+        /* Анімація кнопок відповідей — з'являються по черзі */
+        @keyframes answerFadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .answer-btn-anim { animation: answerFadeUp 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+
+        /* active-стан кнопки при дотику */
+        .list-btn:active { transform: scale(0.96); }
+
+        /* Зелене світіння при правильній */
+        @keyframes correctGlow {
+            0%   { box-shadow: 0 0 0px rgba(76,175,80,0); }
+            50%  { box-shadow: 0 0 28px rgba(76,175,80,0.85); }
+            100% { box-shadow: 0 0 14px rgba(76,175,80,0.4); }
+        }
+        .list-btn.correct {
+            background: rgba(76,175,80,0.15) !important;
+            border: 2px solid #4caf50 !important;
+            color: #4caf50 !important;
+            animation: correctGlow 0.5s ease forwards !important;
+        }
+        .list-btn.wrong {
+            background: rgba(244,67,54,0.15) !important;
+            border: 2px solid #f44336 !important;
+            color: #f44336 !important;
+        }
+
+        .page {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
+            text-align: center; padding: 20px; padding-bottom: 120px;
+            opacity: 0; transform: translateY(15px); pointer-events: none;
+            transition: 0.3s;
+            overflow-y: scroll; 
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        
+        .page::-webkit-scrollbar { display: none; }
+        .page.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        
+        /* ЗМІНЕНО: тепер сторінка вирівнюється по верхньому краю */
+        #home-page { justify-content: flex-start; padding-top: 24px; position: relative; }
+
+        .timer-container {
+            width: 100%; max-width: 340px; height: 6px;
+            background: rgba(255,255,255,0.1); border-radius: 10px;
+            margin-bottom: 20px; overflow: hidden; display: none;
+        }
+        .timer-bar { width: 100%; height: 100%; background: #0088cc; transition: width 0.1s linear; }
+
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(26,26,26,0.9); z-index: 1000;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .loader-spin {
+            width: 40px; height: 40px; border: 4px solid #333;
+            border-top: 4px solid #0088cc; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 15px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .stat-card {
+            background: #2a2a2a; width: 100%; max-width: 340px;
+            border-radius: 20px; padding: 20px; margin-bottom: 15px;
+            text-align: left; border: 1px solid #333; flex-shrink: 0;
+        }
+        .stat-val { font-size: 1.6rem; font-weight: 800; margin-top: 5px; }
+
+        .leaderboard-table { width: 100%; max-width: 340px; background: #2a2a2a; border-radius: 20px; border: 1px solid #333; overflow: hidden; margin-bottom: 20px; flex-shrink: 0; }
+        .leader-row { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #333; }
+        .leader-rank { width: 30px; font-weight: 800; color: #0088cc; }
+        .leader-name { flex: 1; text-align: left; padding-left: 10px; font-weight: 500; }
+        .leader-score { font-weight: 800; color: #4caf50; }
+
+        .tabs-header { display: flex; background: #252525; border-radius: 12px; margin-bottom: 15px; width: 100%; max-width: 340px; padding: 4px; flex-shrink: 0; }
+        .tab-btn { flex: 1; padding: 10px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .tab-btn.active { background: #0088cc; color: white; }
+
+        .archive-btn {
+            position: absolute; top: 15px; right: 10px;
+            background: rgba(255,255,255,0.1); padding: 5px 12px;
+            border-radius: 12px; font-size: 0.75rem; display: flex;
+            align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .logo { width: 90px; margin-bottom: 15px; border-radius: 20px; }
+        .main-action-btn {
+            width: 180px; height: 180px; border-radius: 50%; border: none;
+            background: #f0f0f0; color: #000; font-weight: 800; font-size: 1.2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); transition: 0.2s; flex-shrink: 0;
+        }
+        .main-action-btn:active { transform: scale(0.9); background: #0088cc; color: white; }
+
+        .more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 340px; flex-shrink: 0; }
+        .grid-item { border-radius: 24px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+        .grid-item:active { transform: scale(0.95); opacity: 0.8; }
+
+        .profile-wide-btn {
+            grid-column: span 2; height: 80px; background: #2a2a2a; border: 1px solid #444;
+            margin-top: 12px; border-radius: 20px; display: flex; align-items: center; padding: 0 20px; gap: 15px; cursor: pointer; transition: 0.2s;
+        }
+        .profile-wide-btn:active { background: #333; transform: scale(0.98); }
+
+        .list-btn {
+            width: 100%; max-width: 340px; background: #2a2a2a; border: 1px solid #333;
+            padding: 18px; margin-bottom: 12px; border-radius: 18px;
+            display: flex; align-items: center; gap: 15px; color: white; cursor: pointer; flex-shrink: 0;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+
+        .bottom-nav { position: fixed; bottom: 0; width: 100%; height: 75px; background: #252525; display: flex; border-top: 1px solid #333; z-index: 100; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #888; font-size: 10px; cursor: pointer; }
+        .nav-item.active { color: white; }
+
+        .support-wrapper { position: relative; top: -15px; flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+        .support-circle { 
+            width: 64px; height: 64px; background: #f0f0f0; border-radius: 50%; 
+            display: flex; justify-content: center; align-items: center; color: #1a1a1a; border: 5px solid #1a1a1a; transition: 0.2s;
+        }
+        /* Стилі для призових місць у рейтингу */
+        .rank-1 { background: linear-gradient(90deg, rgba(255, 215, 0, 0.1), transparent) !important; border-left: 4px solid #ffd700 !important; }
+        .rank-2 { background: linear-gradient(90deg, rgba(192, 192, 192, 0.1), transparent) !important; border-left: 4px solid #c0c0c0 !important; }
+        .rank-3 { background: linear-gradient(90deg, rgba(205, 127, 50, 0.1), transparent) !important; border-left: 4px solid #cd7f32 !important; }
+
+        /* Кольори для іконок нагород */
+        .crown-1 { color: #ffd700; } /* Золото */
+        .crown-2 { color: #c0c0c0; } /* Срібло */
+        .crown-3 { color: #cd7f32; } /* Бронза */
+        
+        /* Анімація обертання */
+        @keyframes rotateVinyl {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .vinyl-container {
+            width: 160px; height: 160px; margin: 20px auto; cursor: pointer; position: relative; transition: transform 0.2s;
+        }
+        .vinyl-container:active { transform: scale(0.95); }
+        .vinyl-img {
+            width: 100%; height: 100%; border-radius: 50%; object-fit: cover; box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+        }
+        .vinyl-playing { animation: rotateVinyl 3s linear infinite !important; }
+        .music-badge {
+            position: absolute; bottom: -5px; right: -5px; background: #ffeb3b; color: #000; border-radius: 50%; padding: 5px; display: flex; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .quiz-image-container img { max-width: 100%; border-radius: 15px; margin-bottom: 15px; }
+
+        /* ===== КОНФЕТІ ===== */
+        @keyframes confettiFall {
+            0%   { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+        .confetti-piece {
+            position: fixed; width: 10px; height: 10px; border-radius: 2px; pointer-events: none; z-index: 9999; animation: confettiFall linear forwards;
+        }
+
+        /* ===== ДОСЯГНЕННЯ ===== */
+        .achievements-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 340px; flex-shrink: 0; margin-bottom: 15px; }
+        .achievement-card {
+            background: #2a2a2a; border: 1px solid #333; border-radius: 18px; padding: 15px 12px; display: flex; flex-direction: column;
+            align-items: center; text-align: center; transition: 0.2s; position: relative; overflow: hidden;
+        }
+        .achievement-card.unlocked { border-color: #ffd700; background: linear-gradient(135deg, rgba(255,215,0,0.08), #2a2a2a); }
+        .achievement-card.locked { opacity: 0.4; filter: grayscale(1); }
+        .achievement-icon { font-size: 32px; margin-bottom: 6px; }
+        .achievement-title { font-size: 0.7rem; font-weight: 700; color: #fff; line-height: 1.2; }
+        .achievement-desc  { font-size: 0.62rem; color: #888; margin-top: 3px; line-height: 1.3; }
+        .achievement-new-badge {
+            position: absolute; top: 6px; right: 6px; background: #ff5722; color: white; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 20px;
+        }
+
+        /* ===== TOAST-ПОВІДОМЛЕННЯ ПРО НОВЕ ДОСЯГНЕННЯ ===== */
+        @keyframes toastIn  { from { transform: translate(-50%, 30px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes toastOut { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -10px); } }
+        .achievement-toast {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, 0); background: linear-gradient(135deg, #1e1e1e, #2a2a2a);
+            border: 1px solid #ffd700; border-radius: 20px; padding: 16px 20px; display: flex; align-items: center; gap: 14px;
+            z-index: 5000; box-shadow: 0 12px 40px rgba(0,0,0,0.7); animation: toastIn 0.4s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+            width: calc(100vw - 48px); max-width: 340px;
+        }
+        .achievement-toast.hide { animation: toastOut 0.3s ease forwards; }
+
+        /* ===== КНОПКА ПОДІЛИТИСЬ (профіль) ===== */
+        .profile-share-btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #ffd700, #ff9800);
+            color: #000; border: none; border-radius: 16px; padding: 14px 24px; font-size: 0.9rem; font-weight: 800;
+            cursor: pointer; width: 100%; max-width: 340px; margin-bottom: 15px; flex-shrink: 0; transition: 0.2s; box-shadow: 0 4px 20px rgba(255,215,0,0.25);
+        }
+        .profile-share-btn:active { transform: scale(0.96); opacity: 0.85; }
+
+        /* ===== ПРОФІЛЬНА КАРТКА (canvas overlay) ===== */
+        #profile-card-overlay { position: fixed; inset: 0; z-index: 6000; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+        #profile-card-overlay::before {
+            content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, #0d0d1a, #0a1628, #0d1f3c, #1a0a2e, #0d1a1a, #0a1628);
+            background-size: 400% 400%; animation: bgShift 8s ease infinite; z-index: 0;
+        }
+        @keyframes bgShift { 0% { background-position: 0% 0%; } 25% { background-position: 100% 0%; } 50% { background-position: 100% 100%; } 75% { background-position: 0% 100%; } 100% { background-position: 0% 0%; } }
+        .card-particle { position: absolute; border-radius: 50%; pointer-events: none; animation: particleFloat linear infinite; z-index: 1; }
+        @keyframes particleFloat { 0% { transform: translateY(100vh) rotate(0deg); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(-100px) rotate(720deg); opacity: 0; } }
+        #profile-card-inner { position: relative; z-index: 2; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 20px; box-sizing: border-box; }
+        #profile-card-close {
+            position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3; transition: background 0.2s;
+        }
+        #profile-card-close:active { background: rgba(255,255,255,0.25); }
+        .pcard-box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 14px 10px; backdrop-filter: blur(10px); }
+        .pcard-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 320px; }
+
+        /* ===== АНІМАЦІЯ РАХУНКУ ===== */
+        @keyframes scorePopIn { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+        .score-animated { animation: scorePopIn 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+        /* ===== ЗІРКИ / ІСКРИ ===== */
+        @keyframes starFly { 0% { transform: translate(0,0) scale(1) rotate(0deg); opacity: 1; } 100% { transform: translate(var(--tx), var(--ty)) scale(0) rotate(var(--tr)); opacity: 0; } }
+        .star-particle { position: fixed; pointer-events: none; z-index: 9998; font-size: 20px; animation: starFly 1s ease-out forwards; }
+
+        /* ===== ПРОМОКОД ===== */
+        #promo-input:focus { border-color: #e040fb; }
+
+        /* ===== PULL-TO-REFRESH ===== */
+        .ptr-indicator {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%) translateY(-60px); width: 40px; height: 40px; background: #2a2a2a;
+            border: 1px solid #444; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, opacity 0.15s ease;
+            opacity: 0; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        }
+        .ptr-indicator .material-icons { font-size: 20px; color: #0088cc; transition: transform 0.2s ease; }
+        .ptr-indicator.ptr-visible { opacity: 1; transform: translateX(-50%) translateY(0px); }
+        .ptr-indicator.ptr-ready .material-icons { color: #4caf50; }
+        @keyframes ptrSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .ptr-indicator.ptr-loading .material-icons { animation: ptrSpin 0.7s linear infinite; color: #0088cc; }
+
+        /* ===== МІСЦЕ В РЕЙТИНГУ (профіль) ===== */
+        .rank-badge {
+            display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(0,136,204,0.1));
+            border: 1px solid rgba(255,215,0,0.3); border-radius: 16px; padding: 14px 18px; width: 100%; max-width: 340px; flex-shrink: 0; margin-bottom: 15px;
+        }
+
+        /* ===== СТИЛІ ДЛЯ НОВОЇ СТРІЧКИ НОВИН (ГОЛОВНА СТОРІНКА) ===== */
+        .top-actions {
+            position: absolute; top: 20px; right: 20px; display: flex; gap: 8px; z-index: 50;
+        }
+        .top-action-btn {
+            width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center;
+            color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.05); transition: 0.2s; cursor: pointer;
+        }
+        .top-action-btn:active { background: rgba(255,255,255,0.15); transform: scale(0.9); }
+        
+        .news-card {
+            background: #2a2a2a; border: 1px solid #333; border-radius: 20px; overflow: hidden;
+            position: relative; text-align: left; margin-bottom: 15px; cursor: pointer;
+            transition: transform 0.15s ease; flex-shrink: 0;
+        }
+        .news-card:active { transform: scale(0.96); }
+        
+        .news-img {
+            width: 100%; height: 160px; object-fit: cover; background: #222;
+        }
+        
+        .news-body {
+            padding: 16px; position: relative; max-height: 120px; overflow: hidden;
+        }
+        
+        .news-text {
+            font-size: 0.85rem; color: #ddd; line-height: 1.5; margin: 0;
+        }
+        
+        .news-fade {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 50px;
+            background: linear-gradient(to bottom, rgba(42,42,42,0), #2a2a2a 90%); pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="loader-spin"></div>
+        <div style="font-weight:700;">Зачекайте будь ласка...</div>
+    </div>
+
+    <!-- ===== ОНОВЛЕНА ГОЛОВНА СТОРІНКА ===== -->
+    <div id="home-page" class="page active">
+        
+        <!-- Прозорі кнопки вгорі справа -->
+        <div class="top-actions">
+            <div class="top-action-btn" onclick="handleLink('https://t.me/sh4denews')">
+                <span class="material-icons" style="font-size:18px;">near_me</span>
+            </div>
+            <div class="top-action-btn" onclick="refreshNews()">
+                <span class="material-icons" id="refresh-icon" style="font-size:18px;">refresh</span>
+            </div>
+        </div>
+
+        <!-- Шапка -->
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0; text-align:left;">
+            <img src="Logotype.jpg" style="width:48px; height:48px; border-radius:14px; margin-right:12px; border:1px solid #333;">
+            <div>
+                <h1 style="font-weight:800; font-size:1.3rem; margin:0;">Shade News</h1>
+                <div style="color:#888; font-size:0.8rem; margin-top:2px;">Стрічка новин</div>
+            </div>
+        </div>
+
+        <!-- Контейнер стрічки новин (генерується через JS) -->
+        <div id="news-feed-container" style="width:100%; max-width:340px;">
+            <!-- Картки вставляються тут -->
+        </div>
+
+    </div>
+
+    <div id="more-page" class="page">
+        <h2 style="margin-bottom:20px; font-weight:800;">МЕНЮ</h2>
+        <div class="more-grid">
+            <div class="grid-item" onclick="showPage('quiz-cats')" style="background: linear-gradient(135deg, #6a11cb, #2575fc); grid-row: span 2; height:280px;">
+                <span class="material-icons" style="font-size:40px;">help_outline</span><b>ВІКТОРИНИ</b>
+            </div>
+            <div class="grid-item" onclick="sendTopCommand()" style="background: linear-gradient(135deg, #f2994a, #f2c94c); height:134px;">
+                <span class="material-icons">leaderboard</span><span>ТОП</span>
+            </div>
+            <div class="grid-item" onclick="openBonusPage()" style="background: linear-gradient(135deg, #ff5f6d, #ffc371); height:134px;">
+                <span class="material-icons">card_giftcard</span><span>БОНУСИ</span>
+            </div>
+            <div class="profile-wide-btn" onclick="sendProfileCommand()">
+                <span class="material-icons" style="color:#0088cc; font-size:30px;">account_circle</span>
+                <div style="text-align:left;">
+                    <b style="font-size:1rem;">Мій профіль</b><br>
+                    <small style="color:#888;">Статистика та досягнення</small>
+                </div>
+            </div>
+            <!-- Кнопка адміна — показується тільки адмінам -->
+            <div id="admin-stats-btn" class="profile-wide-btn" onclick="openAdminStats()" style="display:none; border-color:#ff5f6d;">
+                <span class="material-icons" style="color:#ff5f6d; font-size:30px;">bar_chart</span>
+                <div style="text-align:left;">
+                    <b style="font-size:1rem;">Статистика бота</b><br>
+                    <small style="color:#888;">Тільки для адміністраторів</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="top-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0;">
+            <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">Рейтинг</h2>
+        </div>
+        <div class="tabs-header">
+            <div id="tab-month" class="tab-btn active" onclick="switchTopTab('month')">За місяць</div>
+            <div id="tab-all" class="tab-btn" onclick="switchTopTab('all')">Увесь час</div>
+        </div>
+        <div id="top-list-container" class="leaderboard-table">
+            <div style="padding:40px; color:#666;">Завантаження...</div>
+        </div>
+    </div>
+
+    <!-- СТОРІНКА БОНУСІВ -->
+    <div id="bonus-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink:0;">
+            <span class="material-icons" onclick="showPage('more')" style="cursor:pointer;">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">🎁 Бонуси</h2>
+        </div>
+
+        <!-- Плашка рейтингу користувача -->
+        <div id="bonus-my-rating" style="width:100%; max-width:340px; background:linear-gradient(135deg,#ff5f6d,#ffc371); border-radius:20px; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; margin-bottom:15px; flex-shrink:0;">
+            <div>
+                <div style="font-size:0.75rem; color:rgba(0,0,0,0.6); font-weight:700;">МІЙ РЕЙТИНГ</div>
+                <div id="bonus-my-rating-val" style="font-size:2rem; font-weight:800; color:#000;">—</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.75rem; color:rgba(0,0,0,0.6); font-weight:700;">МІСЦЕ</div>
+                <div id="bonus-my-rank-val" style="font-size:2rem; font-weight:800; color:#000;">—</div>
+            </div>
+        </div>
+
+        <!-- Топ рейтингу — кнопка -->
+        <div class="list-btn" onclick="openBonusRatingPage()" style="flex-shrink:0; margin-bottom:15px;">
+            <div style="width:42px; height:42px; background:linear-gradient(135deg,#ff5f6d,#ffc371); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-icons" style="color:white;">leaderboard</span>
+            </div>
+            <div style="text-align:left; flex:1;">
+                <div style="font-weight:700;">Топ рейтингу</div>
+                <div style="font-size:0.75rem; color:#888;">Переглянути всіх учасників</div>
+            </div>
+            <span class="material-icons" style="color:#555;">chevron_right</span>
+        </div>
+
+        <!-- Щоденний бонус -->
+        <div style="width:100%; max-width:340px; margin-bottom:10px; flex-shrink:0;">
+            <div style="font-weight:800; font-size:0.85rem; color:#888; text-align:left; margin-bottom:8px; padding-left:4px;">⚡ ОТРИМАТИ РЕЙТИНГ</div>
+        </div>
+
+        <div class="list-btn" id="daily-bonus-btn" onclick="claimDailyBonus()" style="flex-shrink:0;">
+            <div style="width:42px; height:42px; background:linear-gradient(135deg,#f9a825,#ff6f00); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-icons" style="color:white;">wb_sunny</span>
+            </div>
+            <div style="text-align:left; flex:1;">
+                <div style="font-weight:700;">Щоденний бонус</div>
+                <div id="daily-bonus-sub" style="font-size:0.75rem; color:#888;">+20 рейтингу щодня</div>
+            </div>
+            <div id="daily-bonus-badge" style="background:#4caf50; color:white; font-size:0.7rem; font-weight:800; padding:4px 10px; border-radius:20px;">ЗАБРАТИ</div>
+        </div>
+
+        <div class="list-btn" onclick="openPromoPage()" style="flex-shrink:0;">
+            <div style="width:42px; height:42px; background:linear-gradient(135deg,#7b1fa2,#e040fb); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-icons" style="color:white;">confirmation_number</span>
+            </div>
+            <div style="text-align:left; flex:1;">
+                <div style="font-weight:700;">Промокод</div>
+                <div style="font-size:0.75rem; color:#888;">Введи код — отримай рейтинг</div>
+            </div>
+            <span class="material-icons" style="color:#555;">chevron_right</span>
+        </div>
+
+        <div class="list-btn" onclick="openReferralPage()" style="flex-shrink:0;">
+            <div style="width:42px; height:42px; background:linear-gradient(135deg,#0088cc,#00bcd4); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-icons" style="color:white;">group_add</span>
+            </div>
+            <div style="text-align:left; flex:1;">
+                <div style="font-weight:700;">Реферальна програма</div>
+                <div style="font-size:0.75rem; color:#888;">+100 рейтингу за кожного друга</div>
+            </div>
+            <span class="material-icons" style="color:#555;">chevron_right</span>
+        </div>
+
+        <!-- Завдання -->
+        <div style="width:100%; max-width:340px; margin-top:5px; margin-bottom:10px; flex-shrink:0;">
+            <div style="font-weight:800; font-size:0.85rem; color:#888; text-align:left; margin-bottom:8px; padding-left:4px;">📋 ЗАВДАННЯ</div>
+        </div>
+
+        <div class="list-btn" id="task-channel" onclick="claimTask('channel')" style="flex-shrink:0;">
+            <div style="width:42px; height:42px; background:linear-gradient(135deg,#0088cc,#005f99); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-icons" style="color:white;">telegram</span>
+            </div>
+            <div style="text-align:left; flex:1;">
+                <div style="font-weight:700;">Підписатись на канал</div>
+                <div style="font-size:0.75rem; color:#888;">@sh4denews • +300 рейтингу</div>
+            </div>
+            <div id="task-channel-badge" style="background:#ff9800; color:white; font-size:0.7rem; font-weight:800; padding:4px 10px; border-radius:20px;">+300</div>
+        </div>
+
+        <div class="list-btn" id="task-invite" onclick="openReferralPage()" style="flex-shrink:0;">
+            <div style="width:42px; height:42px; background:linear-gradient(135deg,#4caf50,#1b5e20); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <span class="material-icons" style="color:white;">person_add</span>
+            </div>
+            <div style="text-align:left; flex:1;">
+                <div style="font-weight:700;">Запросити друга</div>
+                <div style="font-size:0.75rem; color:#888;">+150 рейтингу за першого</div>
+            </div>
+            <div id="task-invite-badge" style="background:#ff9800; color:white; font-size:0.7rem; font-weight:800; padding:4px 10px; border-radius:20px;">+150</div>
+        </div>
+    </div>
+
+    <!-- СТОРІНКА ПРОМОКОДУ -->
+    <!-- ТОП РЕЙТИНГУ (окрема сторінка) -->
+    <div id="bonus-rating-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink:0;">
+            <span class="material-icons" onclick="showPage('bonus')" style="cursor:pointer;">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">🏆 Топ рейтингу</h2>
+        </div>
+        <div id="bonus-rating-table" class="leaderboard-table" style="width:100%; max-width:340px;">
+            <div style="padding:30px; color:#666; text-align:center;">Завантаження...</div>
+        </div>
+    </div>
+
+    <div id="promo-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:24px; flex-shrink:0;">
+            <span class="material-icons" onclick="showPage('bonus')" style="cursor:pointer;">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">🎟 Промокод</h2>
+        </div>
+        <div style="font-size:4rem; margin-bottom:16px;">🎟</div>
+        <div style="color:#aaa; font-size:0.9rem; margin-bottom:24px; line-height:1.5; text-align:center;">Введи промокод і отримай<br>бонусний рейтинг</div>
+        <input id="promo-input" type="text" placeholder="Введи промокод..." style="width:100%; max-width:340px; background:#2a2a2a; border:1px solid #444; border-radius:14px; padding:16px 18px; color:white; font-size:1rem; font-family:Inter,sans-serif; outline:none; margin-bottom:12px; box-sizing:border-box; text-transform:uppercase; letter-spacing:2px; flex-shrink:0;">
+        <button onclick="submitPromo()" style="width:100%; max-width:340px; background:linear-gradient(135deg,#7b1fa2,#e040fb); border:none; border-radius:14px; padding:16px; color:white; font-size:1rem; font-weight:800; cursor:pointer; flex-shrink:0;">Активувати</button>
+        <div id="promo-result" style="margin-top:14px; font-size:0.85rem; text-align:center;"></div>
+    </div>
+
+    <!-- СТОРІНКА РЕФЕРАЛЬНОЇ ПРОГРАМИ -->
+    <div id="referral-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:24px; flex-shrink:0;">
+            <span class="material-icons" onclick="showPage('bonus')" style="cursor:pointer;">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">👥 Запроси друга</h2>
+        </div>
+        <div style="font-size:4rem; margin-bottom:16px;">🔗</div>
+        <div style="color:#aaa; font-size:0.9rem; margin-bottom:6px; text-align:center; line-height:1.5;">За кожного запрошеного друга<br>ти отримаєш <b style="color:#ffd700;">+100 рейтингу</b></div>
+        <div style="color:#aaa; font-size:0.85rem; margin-bottom:24px; text-align:center;">Коли він перший раз відкриє бота</div>
+        <div id="ref-link-box" style="width:100%; max-width:340px; background:#2a2a2a; border:1px solid #444; border-radius:14px; padding:14px 16px; font-size:0.8rem; color:#aaa; word-break:break-all; margin-bottom:12px; flex-shrink:0; box-sizing:border-box;"></div>
+        <button onclick="copyRefLink()" style="width:100%; max-width:340px; background:#0088cc; border:none; border-radius:14px; padding:14px; color:white; font-size:1rem; font-weight:800; cursor:pointer; margin-bottom:8px; flex-shrink:0;">
+            📋 Скопіювати посилання
+        </button>
+        <button onclick="shareRefLink()" style="width:100%; max-width:340px; background:#2a2a2a; border:1px solid #444; border-radius:14px; padding:14px; color:white; font-size:1rem; font-weight:700; cursor:pointer; flex-shrink:0;">
+            📤 Поділитись в Telegram
+        </button>
+        <div style="margin-top:20px; width:100%; max-width:340px; background:#2a2a2a; border-radius:16px; padding:16px; flex-shrink:0;">
+            <div style="font-size:0.8rem; color:#888; margin-bottom:4px;">Запрошено друзів</div>
+            <div id="ref-count" style="font-size:1.8rem; font-weight:800; color:#ffd700;">—</div>
+        </div>
+    </div>
+
+    <!-- ПРОФІЛЬ ГРАВЦЯ З ТОПУ -->
+    <div id="player-profile-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink:0;">
+            <span class="material-icons" onclick="showPage('top')" style="cursor:pointer;">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;" id="pp-title">Профіль</h2>
+        </div>
+
+        <!-- Аватар / ім'я -->
+        <div style="width:100%; max-width:340px; background:#2a2a2a; border:1px solid #333; border-radius:20px; padding:20px; display:flex; align-items:center; gap:16px; margin-bottom:15px; flex-shrink:0;">
+            <div id="pp-avatar" style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#0088cc,#005f99); display:flex; align-items:center; justify-content:center; font-size:1.6rem; font-weight:800; flex-shrink:0;"></div>
+            <div>
+                <div id="pp-name" style="font-weight:800; font-size:1.1rem;"></div>
+                <div id="pp-rank-label" style="font-size:0.8rem; color:#ffd700; margin-top:3px;"></div>
+            </div>
+        </div>
+
+        <!-- Статистика -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:340px; flex-shrink:0; margin-bottom:15px;">
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#888; font-size:0.75rem;">Всього балів</div>
+                <div id="pp-total" class="stat-val" style="font-size:1.4rem;">—</div>
+            </div>
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#4caf50; font-size:0.75rem;">За місяць</div>
+                <div id="pp-month" class="stat-val" style="font-size:1.4rem; color:#4caf50;">—</div>
+            </div>
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#0088cc; font-size:0.75rem;">Пройдено квізів</div>
+                <div id="pp-quizzes" class="stat-val" style="font-size:1.4rem; color:#0088cc;">—</div>
+            </div>
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#ffd700; font-size:0.75rem;">Точність</div>
+                <div id="pp-accuracy" class="stat-val" style="font-size:1.4rem; color:#ffd700;">—</div>
+            </div>
+        </div>
+
+        <!-- Графік -->
+        <div class="stat-card" style="display:flex; flex-direction:column; align-items:center;">
+            <div style="width:140px; height:140px; position:relative;">
+                <canvas id="ppChart"></canvas>
+                <div id="pp-chart-percent" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-weight:800; font-size:1.1rem;">0%</div>
+            </div>
+            <div style="margin-top:12px; font-size:0.8rem; color:#888;">Статистика відповідей</div>
+        </div>
+    </div>
+
+<div id="profile-page" class="page">
+    <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0;">
+        <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+        <h2 style="margin:0; margin-left:15px;">Мій профіль</h2>
+    </div>
+
+    <!-- Місце в рейтингу -->
+    <div class="rank-badge" id="p-rank-badge" style="display:none;">
+        <span style="font-size:32px;" id="p-rank-icon">🏅</span>
+        <div>
+            <div style="font-size:0.75rem; color:#aaa;">Моє місце в рейтингу</div>
+            <div style="font-weight:800; font-size:1.3rem;" id="p-rank-text">#—</div>
+            <div style="font-size:0.7rem; color:#888;" id="p-rank-sub"></div>
+        </div>
+    </div>
+    
+    <div class="stat-card" style="display: flex; flex-direction: column; align-items: center;">
+        <div style="width: 160px; height: 160px; position: relative;">
+            <canvas id="statsChart"></canvas>
+            <div id="chart-percent" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: 800; font-size: 1.2rem;">0%</div>
+        </div>
+        <div style="margin-top: 15px; font-size: 0.8rem; color: #888;">Статистика відповідей</div>
+    </div>
+
+    <div class="stat-card">
+        <div style="color:#888; font-size:0.8rem;">Усього балів</div>
+        <div id="p-total" class="stat-val">0</div>
+    </div>
+    
+    <div class="stat-card">
+        <div style="color:#4caf50; font-size:0.8rem;">Балів за місяць</div>
+        <div id="p-month" class="stat-val">0</div>
+    </div>
+
+    <div class="stat-card">
+        <div style="color:#0088cc; font-size:0.8rem;">Пройдено квізів</div>
+        <div id="p-count" class="stat-val">0</div>
+    </div>
+
+    <!-- Досягнення в профілі -->
+    <div style="width:100%; max-width:340px; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-shrink:0;">
+        <div style="font-weight:800; font-size:0.95rem;">🏆 Досягнення</div>
+        <div id="p-ach-count" style="font-size:0.8rem; color:#888;"></div>
+    </div>
+    <div class="achievements-grid" id="p-achievements-grid"></div>
+
+    <!-- Кнопка поділитися статистикою -->
+    <button class="profile-share-btn" onclick="showProfileCard()">
+        <span class="material-icons">auto_awesome</span> Поділитися статистикою
+    </button>
+</div>
+
+    <div id="quiz-cats-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; position:relative; flex-shrink: 0;">
+            <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">Вікторини</h2>
+            <div class="archive-btn" onclick="loadQuizzesFromSheet('Архів', 'Архів квізів', true)">
+                <span class="material-icons" style="font-size:16px;">archive</span> Архів
+            </div>
+        </div>
+        <div class="list-btn" onclick="loadQuizzesFromSheet('Запитання & Відповіді', 'Текстові')">
+        <span class="material-icons" style="color:#4caf50">quiz</span>
+        <div style="text-align:left;"><b>Текстові квізи</b><br><small style="color:#888">Активні зараз</small></div>
+        </div>
+        <div class="list-btn" onclick="loadQuizzesFromSheet(SHEET_MUSIC_URL, 'Музика')">
+            <span class="material-icons" style="color:#ffeb3b">library_music</span>
+            <div style="text-align:left;"><b>Вгадай за музикою</b><br><small style="color:#888">Відкрий звук</small></div>
+        </div>
+        <div class="list-btn" style="opacity:0.4; pointer-events:none; position:relative; overflow:hidden;">
+            <span class="material-icons" style="color:#03a9f4">image</span>
+            <div style="text-align:left;"><b>Вгадай за фото</b><br><small style="color:#888">Незабаром</small></div>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); border-radius:18px; gap:4px;">
+                <span class="material-icons" style="font-size:28px; color:white;">lock</span>
+                <span style="font-size:11px; color:white; font-weight:700;">Незабаром</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="quiz-list-page" class="page">
+        <div class="ptr-indicator" id="ptr-indicator"><span class="material-icons">refresh</span></div>
+        <div id="sheet-quizzes-container" style="width:100%; max-width:340px;"></div>
+    </div>
+
+    <div id="game-page" class="page">
+        <div class="timer-container" id="t-container"><div class="timer-bar" id="t-bar"></div></div>
+        <div id="quiz-progress" style="margin-bottom:10px; color:#888;"></div>
+        <div id="question-box" style="font-weight:700; font-size:1.1rem; margin-bottom:20px; padding:0 10px;"></div>
+        <div id="answers-grid" style="width:100%; max-width:340px; display:grid; gap:10px;"></div>
+        <div id="archive-controls" style="display:none; margin-top:20px;">
+             <button class="list-btn" onclick="nextArchiveStep()" style="background:#0088cc; border:none; justify-content:center;">ДАЛІ</button>
+        </div>
+    </div>
+
+    <!-- СТОРІНКА СТАТИСТИКИ ДЛЯ АДМІНА -->
+    <div id="admin-stats-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink:0;">
+            <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+            <h2 style="margin:0; margin-left:15px;">📊 Статистика</h2>
+        </div>
+
+        <!-- Загальна статистика -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:340px; flex-shrink:0; margin-bottom:15px;">
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#888; font-size:0.75rem;">👥 Всього гравців</div>
+                <div id="as-total-users" class="stat-val" style="font-size:1.4rem;">—</div>
+            </div>
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#4caf50; font-size:0.75rem;">🟢 Активні (місяць)</div>
+                <div id="as-active-month" class="stat-val" style="font-size:1.4rem; color:#4caf50;">—</div>
+            </div>
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#0088cc; font-size:0.75rem;">📅 Активні сьогодні</div>
+                <div id="as-active-today" class="stat-val" style="font-size:1.4rem; color:#0088cc;">—</div>
+            </div>
+            <div class="stat-card" style="margin-bottom:0;">
+                <div style="color:#ff9800; font-size:0.75rem;">🎮 Квізів пройдено</div>
+                <div id="as-total-quizzes" class="stat-val" style="font-size:1.4rem; color:#ff9800;">—</div>
+            </div>
+        </div>
+
+        <!-- Топ квізів -->
+        <div style="width:100%; max-width:340px; flex-shrink:0;">
+            <div style="font-weight:800; font-size:0.9rem; color:#888; text-align:left; margin-bottom:10px; padding-left:4px;">🏆 ТОП КВІЗІВ ЗА ПОПУЛЯРНІСТЮ</div>
+            <div id="as-top-quizzes" class="leaderboard-table">
+                <div style="padding:30px; color:#666; text-align:center;">Завантаження...</div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active" id="n-home" onclick="showPage('home')"><span class="material-icons">home</span><span>Головна</span></div>
+        <div class="support-wrapper" onclick="handleLink('https://t.me/shadenews_bot?start=support')">
+            <div class="support-circle"><span class="material-icons">headset_mic</span></div>
+            <span style="font-size:10px; color:#888; margin-top:5px;">Підтримка</span>
+        </div>
+        <div class="nav-item" id="n-more" onclick="showPage('more')"><span class="material-icons">menu</span><span>Ще</span></div>
+        
+    </nav>
+
+    <script>
+        
+        // ВИПРАВЛЕННЯ: Змінні перенесені на самий початок
+        let isArchiveView = false;
+        let currentQuizData = [], step = 0, score = 0, currentQuizName = "";
+        let timeLeft = 10, timerInterval = null, canAnswer = true;
+
+        const tg = window.Telegram.WebApp;
+        // ЗАМІНИ ТУТ URL НА СВІЙ З GOOGLE APPS SCRIPT
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN37dG-rfa5ok1l5Yoiz1EtF8dV64w0IUX-bmZsEcMFRn0dioQFabRQD9RYmYZDJKT/exec';
+        
+        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQz8eglMYnxPGGVysibaeQOxqN8qWZdNi88NWoXVgjx75JEeXIwlO8Ib6h5RgA8rxANftn1xF1Ml0A9/pub?output=csv';
+        const SHEET_ARCHIVE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOyXjNxTTl4Dje6B_WwQLtxhax3dUWwJz0aVMAHcyKHsQbwEv-DAn2vqvtBiqzBFNjtWNN6AvhKTV9/pub?output=csv';
+        const SHEET_MUSIC_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQRjNtTdktM24BaRtO41l_Gp780nHhBaB0gVWZOLAQ2iUdBt_7RebJdkK5FCP27HAExnzYkA-pFNEsD/pub?output=csv';
+        const SHEET_IMAGE_URL = 'IMAGE_LINK';
+        const SB_URL = 'https://mdkupzrojmulqernsspo.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ka3VwenJvam11bHFlcm5zc3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2ODY2MjksImV4cCI6MjA4NzI2MjYyOX0.N0NWe4ANf2hm-zUFhlCM6dV_8daTIOJWRnx-5e4uxdc';
+
+        // ID адміністраторів (такі самі як у main.py)
+        const ADMIN_IDS = [2005493244, 1733525891];
+        
+        // Тепер Supabase створиться без помилок
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+        
+        tg.expand();
+
+        // Ініціалізація новин при старті
+        document.addEventListener("DOMContentLoaded", () => {
+            renderRealNews();
+        });
+
+        // Перевіряємо чи адмін і показуємо кнопку
+        const currentUser = tg.initDataUnsafe?.user;
+        if (currentUser && ADMIN_IDS.includes(currentUser.id)) {
+            document.getElementById('admin-stats-btn').style.display = 'flex';
+        }
+
+        // Захист від XSS: ім'я користувача (first_name) може містити будь-які символи,
+        // тому перед вставкою в innerHTML його треба екранувати.
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        function showPage(id) {
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+                p.scrollTop = 0;
+            });
+            const target = document.getElementById(id + '-page');
+            if(target) target.classList.add('active');
+            
+            document.getElementById('n-home').classList.toggle('active', id === 'home');
+            document.getElementById('n-more').classList.toggle('active', id !== 'home');
+            if(id !== 'game') clearInterval(timerInterval);
+        }
+
+        function handleLink(url) {
+            if (url.startsWith('https://t.me/')) {
+                tg.openTelegramLink(url);
+            } else {
+                tg.openLink(url);
+            }
+        }
+
+    async function renderRealNews() {
+    const container = document.getElementById('news-feed-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="padding:30px; color:#888; text-align:center;"><div class="loader-spin" style="margin:0 auto 10px auto; width:30px; height:30px;"></div>Отримуємо новини...</div>';
+
+    try {
+        // Звертаємося до нашої бази, яка ніколи не блокується
+        const { data: posts, error } = await _supabase
+            .from('news')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        if (error) throw error;
+
+        if (!posts || posts.length === 0) {
+            container.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Новин поки немає</div>';
+            return;
+        }
+
+        // Генеруємо картки
+        container.innerHTML = posts.map(post => {
+            // Звична обробка рядків: чистимо зайве і замінюємо перенесення
+            let cleanText = post.text ? post.text.replace(/\n/g, '<br>').trim() : 'Новий пост 🎮';
+            
+            // Обрізаємо занадто довгий текст
+            if (cleanText.length > 200) {
+                cleanText = cleanText.substring(0, 200) + '...';
+            }
+
+            // Якщо картинки немає в базі, ставимо дефолтну
+            const imgUrl = post.image_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80';
+            
+            // Формуємо посилання на конкретний пост
+            const postLink = post.message_id ? `https://t.me/sh4denews/${post.message_id}` : 'https://t.me/sh4denews';
+
+            return `
+                <div class="news-card" onclick="handleLink('${postLink}')">
+                    <img src="${imgUrl}" class="news-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80'">
+                    <div class="news-body">
+                        <p class="news-text">${cleanText}</p>
+                        <div class="news-fade"></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    } catch (e) {
+        console.error('Помилка Supabase новин:', e);
+        container.innerHTML = '<div style="padding:20px; color:#f44336; text-align:center;">Не вдалося завантажити стрічку.</div>';
+    }
+}
+
+        function refreshNews() {
+    const icon = document.getElementById('refresh-icon');
+    if(icon) icon.style.animation = 'spin 1s linear infinite';
+    
+    renderRealNews().finally(() => {
+        if(icon) icon.style.animation = 'none';
+        try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
+    });
+}
+        
+// 1. Функція відкриття вкладки ТОП (тепер вона сама завантажує дані)
+// --- ЦЕЙ БЛОК ПОВНІСТЮ ЗАМІНЮЄ СТАРІ ФУНКЦІЇ ТОПУ ТА ПРОФІЛЮ ---
+
+function sendTopCommand() {
+    showPage('top');
+    switchTopTab('month'); 
+}
+
+async function switchTopTab(type) {
+    document.getElementById('tab-all').classList.toggle('active', type === 'all');
+    document.getElementById('tab-month').classList.toggle('active', type === 'month');
+    
+    const container = document.getElementById('top-list-container');
+    container.innerHTML = `<div style="padding:40px; color:#666; text-align:center;">Завантаження...</div>`;
+
+    const column = type === 'month' ? 'monthly_points' : 'total_points';
+
+    try {
+        const { data, error } = await _supabase
+            .from('players')
+            .select('user_id, username, ' + column)
+            .order(column, { ascending: false })
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            container.innerHTML = data.map((u, i) => {
+                const rank = i + 1;
+                let rankClass = "";
+                let iconHtml = `<span style="font-size: 14px; opacity: 0.5;">#</span>${rank}`;
+
+                if (rank === 1) {
+                    rankClass = "rank-1";
+                    iconHtml = `<span class="material-icons crown-1">emoji_events</span>`;
+                } else if (rank === 2) {
+                    rankClass = "rank-2";
+                    iconHtml = `<span class="material-icons crown-2">emoji_events</span>`;
+                } else if (rank === 3) {
+                    rankClass = "rank-3";
+                    iconHtml = `<span class="material-icons crown-3">emoji_events</span>`;
+                }
+
+                const safeName = escapeHtml(u.username || 'Гравець');
+                return `
+                    <div class="leader-row ${rankClass} top-row-clickable" style="cursor:pointer;" data-user-id="${escapeHtml(u.user_id)}" data-username="${safeName}" data-rank="${rank}">
+                        <div class="leader-rank" style="display:flex; align-items:center; justify-content:center; width:40px;">
+                            ${iconHtml}
+                        </div>
+                        <div class="leader-name" style="${rank <= 3 ? 'font-weight:800;' : ''}">
+                            ${safeName}
+                        </div>
+                        <div class="leader-score" style="display:flex;align-items:center;gap:4px;">
+                            ${u[column] || 0}
+                            <span class="material-icons" style="font-size:14px;color:#555;">chevron_right</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Вішаємо обробники через addEventListener замість onclick з підстановкою рядків —
+            // так ім'я користувача ніколи не потрапляє напряму в атрибут HTML.
+            container.querySelectorAll('.top-row-clickable').forEach(row => {
+                row.addEventListener('click', () => {
+                    openPlayerProfile(row.dataset.userId, row.dataset.username, parseInt(row.dataset.rank, 10));
+                });
+            });
+        } else {
+            container.innerHTML = `<div style="padding:40px; color:#666; text-align:center;">Рейтинг порожній</div>`;
+        }
+    } catch (e) {
+        console.error("Помилка при завантаженні ТОПу:", e);
+        container.innerHTML = `<div style="padding:40px; color:#f44336; text-align:center;">Помилка завантаження</div>`;
+    }
+}
+
+let ppChart = null;
+
+async function openPlayerProfile(userId, username, rank) {
+    showPage('player-profile');
+
+    const initials = username.trim().charAt(0).toUpperCase();
+    document.getElementById('pp-title').innerText = username;
+    document.getElementById('pp-avatar').innerText = initials;
+    document.getElementById('pp-name').innerText = username;
+
+    const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank <= 10 ? '🏅' : '📊';
+    document.getElementById('pp-rank-label').innerText = `${rankEmoji} #${rank} в рейтингу`;
+
+    ['pp-total','pp-month','pp-quizzes','pp-accuracy'].forEach(id => {
+        document.getElementById(id).innerText = '...';
+    });
+    document.getElementById('pp-chart-percent').innerText = '...';
+
+    try {
+        const { data: player } = await _supabase
+            .from('players')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        const { count: quizCount } = await _supabase
+            .from('completed_quizzes')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId);
+
+        if (player) {
+            const correct = player.total_correct_answers || 0;
+            const wrong   = player.total_wrong_answers   || 0;
+            const total   = correct + wrong;
+            const pct     = total > 0 ? Math.round(correct / total * 100) : 0;
+
+            document.getElementById('pp-total').innerText    = player.total_points   || 0;
+            document.getElementById('pp-month').innerText    = player.monthly_points || 0;
+            document.getElementById('pp-quizzes').innerText  = quizCount || 0;
+            document.getElementById('pp-accuracy').innerText = pct + '%';
+            document.getElementById('pp-chart-percent').innerText = pct + '%';
+
+            const ctx = document.getElementById('ppChart').getContext('2d');
+            if (ppChart) ppChart.destroy();
+            ppChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Правильно', 'Неправильно'],
+                    datasets: [{
+                        data: [correct || 1, wrong || 0],
+                        backgroundColor: ['#4caf50', '#f44336'],
+                        borderWidth: 0,
+                        cutout: '80%'
+                    }]
+                },
+                options: {
+                    plugins: { legend: { display: false } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+    } catch(e) {
+        console.error('Помилка профілю гравця:', e);
+    }
+}
+
+async function sendProfileCommand() { 
+    showPage('profile');
+    const user = tg.initDataUnsafe?.user;
+    
+    if (!user) {
+        renderAchievementsGrid({});
+        return;
+    }
+
+    try {
+        const { data: player } = await _supabase
+            .from('players')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        const { count: quizCount } = await _supabase
+            .from('completed_quizzes')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+
+        const totalPts = player?.total_points || 0;
+
+        // Рейтингове місце: скільки гравців мають більше балів
+        const { count: rankCount } = await _supabase
+            .from('players')
+            .select('*', { count: 'exact', head: true })
+            .gt('total_points', totalPts);
+        const rank = (rankCount || 0) + 1;
+
+        if (player) {
+            document.getElementById('p-total').innerText = totalPts;
+            document.getElementById('p-month').innerText = player.monthly_points || 0;
+            document.getElementById('p-count').innerText = quizCount || 0;
+            updateChart(player.total_correct_answers || 0, player.total_wrong_answers || 0);
+        }
+
+        // Показуємо місце в рейтингу
+        const rankBadge = document.getElementById('p-rank-badge');
+        const rankIcon = document.getElementById('p-rank-icon');
+        const rankText = document.getElementById('p-rank-text');
+        const rankSub  = document.getElementById('p-rank-sub');
+        if (rankBadge) {
+            rankBadge.style.display = 'flex';
+            rankText.innerText = `#${rank}`;
+            if (rank === 1) { rankIcon.innerText = '🥇'; rankSub.innerText = 'Ти перший! 👑'; }
+            else if (rank <= 3) { rankIcon.innerText = '🥈'; rankSub.innerText = `Топ-3 рейтингу!`; }
+            else if (rank <= 10) { rankIcon.innerText = '🏅'; rankSub.innerText = 'Топ-10 рейтингу!'; }
+            else { rankIcon.innerText = '📊'; rankSub.innerText = `Загальний рейтинг`; }
+        }
+
+        // Рейтинг з бонусів
+        let userRating = 0, rankRating = 0;
+        try {
+            const ratingData = await getRating(user.id);
+            userRating = ratingData?.rating || 0;
+            const { count: ratRankCount } = await _supabase
+                .from('ratings').select('*', { count: 'exact', head: true })
+                .gt('rating', userRating);
+            rankRating = (ratRankCount || 0) + 1;
+        } catch(e) {}
+
+        // Досягнення
+        const statsForAch = {
+            quizCount: quizCount || 0,
+            total_points: totalPts,
+            hadPerfect: false,
+            rankPoints: rank,
+            rankRating,
+            userRating,
+            sharedCard: false
+        };
+        renderAchievementsGrid(statsForAch);
+
+    } catch (e) {
+        console.error("Помилка профілю:", e);
+        renderAchievementsGrid({});
+    }
+}
+// --- КІНЕЦЬ БЛОКУ ---
+
+async function openAdminStats() {
+    showPage('admin-stats');
+
+    // Скидаємо до стану завантаження
+    document.getElementById('as-total-users').innerText = '—';
+    document.getElementById('as-active-month').innerText = '—';
+    document.getElementById('as-active-today').innerText = '—';
+    document.getElementById('as-total-quizzes').innerText = '—';
+    document.getElementById('as-top-quizzes').innerHTML = '<div style="padding:30px; color:#666; text-align:center;">Завантаження...</div>';
+
+    try {
+        const currentMonth = new Date().toISOString().slice(0, 7); // "2026-03"
+        const today = new Date().toISOString().slice(0, 10);       // "2026-03-17"
+
+        // 1. Загальна кількість гравців
+        const { count: totalUsers } = await _supabase
+            .from('players')
+            .select('*', { count: 'exact', head: true });
+
+        // 2. Активні цього місяця (є monthly_points > 0 і last_month = поточний)
+        const { count: activeMonth } = await _supabase
+            .from('players')
+            .select('*', { count: 'exact', head: true })
+            .eq('last_month', currentMonth)
+            .gt('monthly_points', 0);
+
+        // 3. Активні сьогодні — квізи пройдені сьогодні (якщо є created_at)
+        const { count: activeToday } = await _supabase
+            .from('completed_quizzes')
+            .select('user_id', { count: 'exact', head: true })
+            .gte('created_at', today + 'T00:00:00')
+            .lte('created_at', today + 'T23:59:59');
+
+        // 4. Всього пройдених квізів
+        const { count: totalQuizzes } = await _supabase
+            .from('completed_quizzes')
+            .select('*', { count: 'exact', head: true });
+
+        // 5. Топ квізів за кількістю проходжень
+        const { data: quizRows } = await _supabase
+            .from('completed_quizzes')
+            .select('quiz_id');
+
+        // Рахуємо вручну (Supabase anon не підтримує GROUP BY напряму)
+        const quizCounts = {};
+        (quizRows || []).forEach(r => {
+            const id = r.quiz_id || 'Невідомо';
+            quizCounts[id] = (quizCounts[id] || 0) + 1;
+        });
+        const top10 = Object.entries(quizCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        // Відображаємо числа
+        document.getElementById('as-total-users').innerText = totalUsers || 0;
+        document.getElementById('as-active-month').innerText = activeMonth || 0;
+        document.getElementById('as-active-today').innerText = activeToday || 0;
+        document.getElementById('as-total-quizzes').innerText = totalQuizzes || 0;
+
+        // Відображаємо топ квізів
+        const topContainer = document.getElementById('as-top-quizzes');
+        if (top10.length > 0) {
+            topContainer.innerHTML = top10.map(([name, count], i) => `
+                <div class="leader-row ${i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : ''}">
+                    <div class="leader-rank" style="display:flex; align-items:center; justify-content:center; width:40px;">
+                        ${i === 0
+                            ? '<span class="material-icons crown-1">emoji_events</span>'
+                            : i === 1
+                            ? '<span class="material-icons crown-2">emoji_events</span>'
+                            : i === 2
+                            ? '<span class="material-icons crown-3">emoji_events</span>'
+                            : `<span style="font-size:14px; opacity:0.5;">#</span>${i + 1}`}
+                    </div>
+                    <div class="leader-name" style="${i < 3 ? 'font-weight:800;' : ''}">${escapeHtml(name)}</div>
+                    <div class="leader-score">${count} разів</div>
+                </div>
+            `).join('');
+        } else {
+            topContainer.innerHTML = '<div style="padding:30px; color:#666; text-align:center;">Немає даних</div>';
+        }
+
+    } catch (e) {
+        console.error('Помилка статистики адміна:', e);
+        document.getElementById('as-top-quizzes').innerHTML = '<div style="padding:30px; color:#f44336; text-align:center;">Помилка завантаження</div>';
+    }
+}
+
+        window.addEventListener('message', (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'update_profile') {
+                    document.getElementById('p-total').innerText = data.total;
+                    document.getElementById('p-month').innerText = data.month;
+                    document.getElementById('p-count').innerText = data.count;
+                }
+                if (data.type === 'update_leaderboard') {
+                    const container = document.getElementById('top-list-container');
+                    container.innerHTML = '';
+                    data.users.forEach((user, index) => {
+                        const row = document.createElement('div');
+                        row.className = 'leader-row';
+                        row.innerHTML = `
+                            <div class="leader-rank">#${index + 1}</div>
+                            <div class="leader-name">${user.name}</div>
+                            <div class="leader-score">${user.score}</div>
+                        `;
+                        container.appendChild(row);
+                    });
+                }
+            } catch (e) {}
+        });
+
+// Оновлена функція завантаження для старого формату (Рядок = 1 Квіз)
+async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
+    isArchiveView = archiveMode;
+    window._lastSheetUrl    = sheetName; 
+    window._lastSheetTitle  = title;
+    window._lastArchiveMode = archiveMode;
+    
+    document.getElementById('loading-overlay').style.display = 'flex';
+    
+    try {
+        const user = tg.initDataUnsafe?.user;
+        let completedIds = {};
+
+        // Історія з Supabase
+        if (user && !isArchiveView) {
+            const { data: history } = await _supabase
+                .from('completed_quizzes')
+                .select('quiz_id, score_text')
+                .eq('user_id', user.id);
+            if (history) {
+                history.forEach(item => { completedIds[item.quiz_id] = item.score_text; });
+            }
+        }
+
+        // Запит до Apps Script
+        const res = await fetch(`${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`);
+        if (!res.ok) throw new Error("Помилка мережі");
+        
+        const jsonData = await res.json();
+        
+        const container = document.getElementById('sheet-quizzes-container');
+        container.innerHTML = `
+            <div style="display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0;">
+                <span class="material-icons" onclick="showPage('quiz-cats')">arrow_back</span>
+                <h2 style="margin:0; margin-left:15px;">${title}</h2>
+            </div>
+        `;
+
+        if (jsonData.error || jsonData.length === 0) {
+            container.innerHTML += `<div style="text-align:center; color:#888;">Немає запитань</div>`;
+            showPage('quiz-list');
+            return;
+        }
+
+        let parsedQuizzes = [];
+        
+        // Парсимо JSON (кожен елемент - це один рядок з таблиці = 1 квіз)
+        jsonData.forEach(item => {
+            let name = item.name;
+            let quizContent = item.content;
+
+            if (!name || !quizContent) return;
+
+            let cleanId = name.replace(/^#\d+/, '').trim();
+            const isDone = !!completedIds[cleanId];
+
+            parsedQuizzes.push({
+                fullName: name,
+                cleanId: cleanId,
+                content: quizContent,
+                isDone: isDone,
+                scoreText: completedIds[cleanId] || ""
+            });
+        });
+
+        // СОРТУВАННЯ: Пройдені (isDone: true) йдуть у кінець
+        parsedQuizzes.sort((a, b) => (a.isDone === b.isDone) ? 0 : a.isDone ? 1 : -1);
+                
+        // ВІДОБРАЖЕННЯ КАРТОК
+        parsedQuizzes.forEach(quiz => {
+            let name = quiz.fullName;
+            // Рахуємо кількість запитань (розділених крапкою з комою)
+            const questionsCount = quiz.content.split(';').filter(q => q.trim().length > 0).length;
+
+            let difficultyText = "Звичайний";
+            let difficultyColor = "#888";
+            let pointsPerAnswer = 1;
+
+            if (name.startsWith("#0")) {
+                difficultyText = "Легко"; difficultyColor = "#4caf50"; pointsPerAnswer = 1;
+                name = name.replace("#0", "").trim();
+            } else if (name.startsWith("#1")) {
+                difficultyText = "Середній"; difficultyColor = "#ff9800"; pointsPerAnswer = 2;
+                name = name.replace("#1", "").trim();
+            } else if (name.startsWith("#2")) {
+                difficultyText = "Складний"; difficultyColor = "#f44336"; pointsPerAnswer = 3;
+                name = name.replace("#2", "").trim();
+            }
+
+            const btn = document.createElement('div');
+            btn.className = 'list-btn';
+            
+            if (quiz.isDone) {
+                btn.style.opacity = '0.5';
+                btn.style.pointerEvents = 'none';
+                btn.style.borderLeft = '4px solid #4caf50';
+            }
+
+            btn.innerHTML = `
+                <span class="material-icons">${quiz.isDone ? 'lock' : (isArchiveView ? 'visibility' : 'play_circle')}</span>
+                <div style="text-align:left; flex:1;">
+                    <div style="font-weight:700;">${name}</div>
+                    <div style="font-size:0.75rem; margin-top:2px;">
+                        <span style="color:${difficultyColor}; font-weight:bold;">${difficultyText}</span>
+                        ${quiz.isDone 
+                            ? `<span style="color:#4caf50; margin-left:8px;">✅ Результат: ${quiz.scoreText}</span>` 
+                            : `<span style="color:#888; margin-left:8px;">📝 Запитань: ${questionsCount}</span>`}
+                    </div>
+                    <div style="font-size:0.7rem; color:#aaa; margin-top:1px;">
+                        Нагорода: ${pointsPerAnswer} ${pointsPerAnswer === 1 ? 'бал' : 'бали'} за відповідь
+                    </div>
+                </div>
+            `;
+            
+            if (!quiz.isDone) {
+                btn.onclick = () => {
+                    window.currentQuizId = quiz.cleanId; 
+                    initGame(quiz.fullName, quiz.content); // Використовуємо стару добру initGame!
+                    window.currentPointsMultiplier = pointsPerAnswer; 
+                };
+            }
+            container.appendChild(btn);
+        });
+
+        showPage('quiz-list');
+    } catch (err) {
+        console.error("Помилка:", err);
+        tg.showAlert("Не вдалося завантажити дані");
+    } finally {
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+}
+
+let currentAudio = null;
+
+function renderStep() {
+    canAnswer = true;
+    const data = currentQuizData[step];
+    if (!data) return;
+
+    let stepTime = 10;
+    if (currentQuizName.includes("Музика")) stepTime = 30;
+    else if (data.media) stepTime = 15;
+
+    const gamePage = document.getElementById('game-page');
+
+    // Якщо вже є контент — спочатку slide-out, потім рендеримо новий
+    const existing = gamePage.querySelector('.game-content');
+    if (existing) {
+        existing.classList.add('question-exit');
+        setTimeout(() => _doRender(gamePage, data, stepTime), 240);
+    } else {
+        _doRender(gamePage, data, stepTime);
+    }
+}
+
+function _doRender(gamePage, data, stepTime) {
+    gamePage.innerHTML = `
+        <div class="game-content" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+            <div class="timer-container question-anim" id="t-container" style="display:block">
+                <div class="timer-bar" id="t-bar"></div>
+            </div>
+            <div id="quiz-progress" class="question-anim" style="margin-bottom:10px; color:#888; animation-delay:0.05s;">ПИТАННЯ ${step + 1} / ${currentQuizData.length}</div>
+
+            ${currentQuizName.includes("Музика") && data.media ? `
+                <div class="vinyl-container question-anim" style="animation-delay:0.08s;" onclick="playQuizMusic('${data.media}')">
+                    <img src="https://raw.githubusercontent.com/squaliee/Guess-the-Music-Shade-News/main/vynil.png" class="vinyl-img" id="vinyl-element">
+                    <div class="music-badge"><span class="material-icons">play_arrow</span></div>
+                </div>
+            ` : (data.media ? `<div class="quiz-image-container question-anim" style="animation-delay:0.08s;"><img src="${data.media}"></div>` : '')}
+
+            <div id="question-box" class="question-anim" style="font-weight:700; font-size:1.1rem; margin-bottom:20px; text-align:center; padding:0 10px; animation-delay:0.1s;">${data.q}</div>
+            <div id="answers-grid" style="width:100%; max-width:340px; display:grid; gap:10px;"></div>
+        </div>
+    `;
+
+    const grid = document.getElementById('answers-grid');
+    const opts = [...data.options];
+    if (!isArchiveView) opts.sort(() => Math.random() - 0.5);
+
+    opts.forEach((opt, idx) => {
+        const b = document.createElement('div');
+        b.className = 'list-btn answer-btn-anim';
+        b.style.animationDelay = (0.15 + idx * 0.07) + 's';
+        b.innerText = opt;
+        b.onclick = () => {
+            if (currentAudio) currentAudio.pause();
+            handleAnswer(b, opt);
+        };
+        grid.appendChild(b);
+    });
+
+    if (!isArchiveView) startTimer(stepTime);
+}
+
+function stopMusic() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    const vinyl = document.getElementById('vinyl-element');
+    if(vinyl) vinyl.classList.remove('vinyl-playing');
+}
+
+// Стара функція, залишена для сумісності з іншими сторінками/архівами
+function initGame(name, rawData) {
+    currentQuizName = name;
+    currentQuizData = rawData.split(';').map(q => {
+        let parts = q.split('|').map(p => p.trim());
+        
+        // 1. Шукаємо посилання і витягуємо його
+        const mediaIndex = parts.findIndex(p => p.startsWith('http'));
+        let mediaUrl = null;
+        if (mediaIndex !== -1) {
+            mediaUrl = parts[mediaIndex];
+            parts.splice(mediaIndex, 1); // Видаляємо URL, щоб він не став кнопкою
+        }
+
+        // 2. Перший елемент, що залишився — це питання
+        const questionText = parts[0] || "Вгадайте, що це?";
+        
+        // 3. Наступні 4 елементи — це варіанти відповідей
+        // Це виправить проблему, коли "Питання" потрапляє в кнопки
+        const options = parts.slice(1, 5); 
+
+        return { 
+            q: questionText, 
+            options: options, 
+            correct: options[0], // Перший варіант вважаємо правильним
+            media: mediaUrl 
+        };
+    });
+    
+    step = 0; score = 0;
+    showPage('game');
+    renderStep();
+}
+
+// ============================================================
+// ДОСЯГНЕННЯ — визначення
+// ============================================================
+const ACHIEVEMENTS = [
+    // Квізи
+    { id: 'quiz_3',       icon: '🎮', title: '3 квізи',          desc: 'Пройди 3 квізи',                        check: (s) => s.quizCount >= 3 },
+    { id: 'quiz_10',      icon: '🔥', title: '10 квізів',         desc: 'Пройди 10 квізів',                      check: (s) => s.quizCount >= 10 },
+    { id: 'quiz_25',      icon: '💎', title: '25 квізів',         desc: 'Пройди 25 квізів',                      check: (s) => s.quizCount >= 25 },
+    // Бали
+    { id: 'pts_50',       icon: '⚡', title: '50 балів',          desc: 'Набери 50 балів',                       check: (s) => s.total_points >= 50 },
+    { id: 'pts_150',      icon: '💫', title: '150 балів',         desc: 'Набери 150 балів',                      check: (s) => s.total_points >= 150 },
+    { id: 'pts_400',      icon: '🚀', title: '400 балів',         desc: 'Набери 400 балів',                      check: (s) => s.total_points >= 400 },
+    // Майстерність
+    { id: 'perfect',      icon: '⭐', title: 'Перфекціоніст',    desc: '100% у будь-якому квізі',               check: (s) => s.hadPerfect },
+    { id: 'shared',       icon: '📸', title: 'Зірка соцмереж',   desc: 'Поділитися статистикою',                check: (s) => s.sharedCard },
+    // Топ по балах
+    { id: 'pts_top5',     icon: '🏅', title: 'Еліта балів',      desc: 'Топ-5 рейтингу по балах',               check: (s) => s.rankPoints <= 5 && s.rankPoints > 0 },
+    { id: 'pts_top3',     icon: '🥉', title: 'Подіум балів',     desc: 'Топ-3 рейтингу по балах',               check: (s) => s.rankPoints <= 3 && s.rankPoints > 0 },
+    // Топ по рейтингу (бонуси)
+    { id: 'rat_top5',     icon: '🌟', title: 'Еліта рейтингу',   desc: 'Топ-5 рейтингу в Бонусах',             check: (s) => s.rankRating <= 5 && s.rankRating > 0 },
+    { id: 'rat_top3',     icon: '👑', title: 'Подіум рейтингу',  desc: 'Топ-3 рейтингу в Бонусах',             check: (s) => s.rankRating <= 3 && s.rankRating > 0 },
+    // Рейтинг (бонуси)
+    { id: 'rat_1000',     icon: '🎯', title: '1000 рейтингу',    desc: 'Набери 1000 рейтингу в Бонусах',       check: (s) => s.userRating >= 1000 },
+    { id: 'rat_2500',     icon: '💠', title: '2500 рейтингу',    desc: 'Набери 2500 рейтингу в Бонусах',       check: (s) => s.userRating >= 2500 },
+    { id: 'rat_7000',     icon: '🔱', title: '7000 рейтингу',    desc: 'Набери 7000 рейтингу в Бонусах',       check: (s) => s.userRating >= 7000 },
+];
+
+function getLocalAchievements() {
+    try { return JSON.parse(localStorage.getItem('sn_achievements') || '{}'); } catch { return {}; }
+}
+function saveLocalAchievements(obj) {
+    try { localStorage.setItem('sn_achievements', JSON.stringify(obj)); } catch {}
+}
+
+// Перевіряє і нараховує нові досягнення, повертає масив нових
+function checkAchievements(stats) {
+    const saved = getLocalAchievements();
+    const newlyUnlocked = [];
+    ACHIEVEMENTS.forEach(ach => {
+        if (!saved[ach.id] && ach.check(stats)) {
+            saved[ach.id] = Date.now();
+            newlyUnlocked.push(ach);
+        }
+    });
+    saveLocalAchievements(saved);
+    return newlyUnlocked;
+}
+
+function renderAchievementsGrid(stats) {
+    const saved = getLocalAchievements();
+    const grid = document.getElementById('p-achievements-grid');
+    if (!grid) return;
+    const unlocked = ACHIEVEMENTS.filter(a => saved[a.id]);
+    document.getElementById('p-ach-count').innerText = `${unlocked.length}/${ACHIEVEMENTS.length}`;
+    grid.innerHTML = ACHIEVEMENTS.map(ach => {
+        const isUnlocked = !!saved[ach.id];
+        const isNew = stats && stats._newIds && stats._newIds.includes(ach.id);
+        return `
+            <div class="achievement-card ${isUnlocked ? 'unlocked' : 'locked'}">
+                ${isNew ? '<div class="achievement-new-badge">НОВЕ!</div>' : ''}
+                <div class="achievement-icon">${ach.icon}</div>
+                <div class="achievement-title">${ach.title}</div>
+                <div class="achievement-desc">${ach.desc}</div>
+            </div>`;
+    }).join('');
+}
+
+// Toast-повідомлення про нове досягнення
+function showAchievementToast(ach) {
+    const existing = document.querySelector('.achievement-toast');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.className = 'achievement-toast';
+    el.innerHTML = `
+        <span style="font-size:28px;">${ach.icon}</span>
+        <div>
+            <div style="font-size:0.65rem; color:#ffd700; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Нове досягнення!</div>
+            <div style="font-size:0.9rem; font-weight:800;">${ach.title}</div>
+            <div style="font-size:0.72rem; color:#aaa;">${ach.desc}</div>
+        </div>`;
+    document.body.appendChild(el);
+    setTimeout(() => {
+        el.classList.add('hide');
+        setTimeout(() => el.remove(), 400);
+    }, 3500);
+}
+
+// ============================================================
+// КОНФЕТІ
+// ============================================================
+function spawnConfetti() {
+    const colors = ['#ffd700','#0088cc','#4caf50','#ff5722','#e91e63','#9c27b0'];
+    for (let i = 0; i < 60; i++) {
+        const el = document.createElement('div');
+        el.className = 'confetti-piece';
+        el.style.left = Math.random() * 100 + 'vw';
+        el.style.top = '-12px';
+        el.style.background = colors[Math.floor(Math.random() * colors.length)];
+        el.style.width = el.style.height = (6 + Math.random() * 8) + 'px';
+        el.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+        el.style.animationDuration = (1.2 + Math.random() * 2) + 's';
+        el.style.animationDelay = (Math.random() * 0.8) + 's';
+        document.body.appendChild(el);
+        el.addEventListener('animationend', () => el.remove());
+    }
+}
+
+// ============================================================
+// ПОДІЛИТИСЬ
+// ============================================================
+function shareResult(score, total, points, quizName) {
+    const percent = Math.round(score / total * 100);
+    const stars = percent === 100 ? '⭐⭐⭐' : percent >= 60 ? '⭐⭐' : '⭐';
+    const text = `${stars} Пройшов квіз «${quizName}» у Shade News!
+✅ Правильних: ${score}/${total} (${percent}%)
+💎 Зароблено: ${points} балів
+
+🎮 Спробуй і ти → @shadenews_bot`;
+    try {
+        if (tg.shareURL) {
+            tg.shareURL('https://t.me/shadenews_bot', text);
+        } else {
+            tg.switchInlineQuery(text, ['users']);
+        }
+    } catch(e) {
+        tg.showAlert(text);
+    }
+}
+
+        function startTimer(seconds) {
+    if(isArchiveView) return;
+    clearInterval(timerInterval);
+    timeLeft = seconds;
+    const bar = document.getElementById('t-bar');
+    timerInterval = setInterval(() => {
+        timeLeft -= 0.1;
+        if(bar) bar.style.width = (timeLeft / seconds * 100) + '%';
+        if (timeLeft <= 0) {
+            stopMusic();
+            clearInterval(timerInterval);
+            handleAnswer(null);
+        }
+    }, 100);
+}
+
+
+        function nextArchiveStep() {
+            step++;
+            if(step < currentQuizData.length) renderStep();
+            else location.reload();
+        }
+
+        function handleAnswer(element, selectedOpt) {
+            if(!canAnswer) return;
+            canAnswer = false;
+            clearInterval(timerInterval);
+            const data = currentQuizData[step];
+            const isCorrect = selectedOpt && selectedOpt.trim() === data.correct.trim();
+            if (isCorrect) {
+                score++;
+                if(element) element.classList.add('correct');
+                spawnConfetti();
+                tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                if(element) element.classList.add('wrong');
+                tg.HapticFeedback.notificationOccurred('error');
+            }
+            setTimeout(() => {
+                step++;
+                if(step < currentQuizData.length) renderStep();
+                else finishGame();
+            }, 1000);
+        }
+
+        async function finishGame() {
+    const pointsPerAnswer = window.currentPointsMultiplier || 1;
+    const newPoints = score * pointsPerAnswer;
+    const user = tg.initDataUnsafe?.user;
+    const wrongAnswers = currentQuizData.length - score;
+
+    // 1. ПЕРЕВІРКА НА АРХІВ
+    if (isArchiveView) {
+        const gamePage = document.getElementById('game-page');
+        gamePage.innerHTML = `
+            <div class="question-anim" style="text-align:center; padding: 20px;">
+                <div style="font-size: 60px; margin-bottom: 20px;">📂</div>
+                <h2 style="color:#888; margin-bottom: 10px;">Перегляд архіву</h2>
+                <p style="font-size:24px; margin-bottom: 5px;">Ваш результат: <b>${score}/${currentQuizData.length}</b></p>
+                <p style="color:#aaa; font-size:14px; line-height:1.4;">Це архівний квіз. Бали в рейтинг не зараховуються.</p>
+                <button class="list-btn" onclick="location.reload()" style="justify-content:center; background:#0088cc; border:none; width:100%; margin-top:20px;">
+                    <span class="material-icons">home</span> НА ГОЛОВНУ
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    // 2. ЛОГІКА ДЛЯ ЗВИЧАЙНИХ КВІЗІВ
+    let updatedTotal = 0, updatedQuizCount = 0, userRank = 0;
+    if (user) {
+        try {
+            let { data: players } = await _supabase
+                .from('players')
+                .select('total_points, monthly_points, total_correct_answers, total_wrong_answers, last_month')
+                .eq('user_id', user.id);
+
+            const currentTotal = (players && players.length > 0) ? (players[0].total_points || 0) : 0;
+            const currentMonthly = (players && players.length > 0) ? (players[0].monthly_points || 0) : 0;
+
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            const savedMonth = (players && players[0]?.last_month) || null;
+            const isNewMonth = savedMonth !== currentMonth;
+            updatedTotal = currentTotal + newPoints;
+
+            await _supabase
+                .from('players')
+                .upsert({
+                    user_id: user.id,
+                    username: user.username || user.first_name || "Гравець",
+                    total_points: updatedTotal,
+                    monthly_points: isNewMonth ? newPoints : currentMonthly + newPoints,
+                    total_correct_answers: (players && players[0]?.total_correct_answers || 0) + score,
+                    total_wrong_answers: (players && players[0]?.total_wrong_answers || 0) + wrongAnswers,
+                    last_month: currentMonth
+                }, { onConflict: 'user_id' });
+
+            const scoreText = `${score}/${currentQuizData.length}`;
+            await _supabase
+                .from('completed_quizzes')
+                .upsert({
+                    user_id: user.id,
+                    quiz_id: window.currentQuizId,
+                    score_text: scoreText
+                }, { onConflict: 'user_id, quiz_id' });
+
+            // Підраховуємо кількість пройдених квізів
+            const { count: qCount } = await _supabase
+                .from('completed_quizzes')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user.id);
+            updatedQuizCount = qCount || 0;
+
+            // Отримуємо рейтингове місце
+            const { count: rankCount } = await _supabase
+                .from('players')
+                .select('*', { count: 'exact', head: true })
+                .gt('total_points', updatedTotal);
+            userRank = (rankCount || 0) + 1;
+
+        } catch (e) {
+            console.error("Помилка Supabase:", e);
+        }
+    }
+
+    // 3. ПЕРЕВІРКА ДОСЯГНЕНЬ
+    const hadPerfect = score === currentQuizData.length;
+
+    // Отримуємо рейтинг з бонусів
+    let userRating = 0, rankRating = 0;
+    if (user) {
+        try {
+            const ratingData = await getRating(user.id);
+            userRating = ratingData?.rating || 0;
+            const { count: ratRankCount } = await _supabase
+                .from('ratings').select('*', { count: 'exact', head: true })
+                .gt('rating', userRating);
+            rankRating = (ratRankCount || 0) + 1;
+        } catch(e) {}
+    }
+
+    const statsForAch = {
+        quizCount: updatedQuizCount,
+        total_points: updatedTotal,
+        hadPerfect,
+        rankPoints: userRank,
+        rankRating,
+        userRating,
+        sharedCard: false
+    };
+    const newAchs = checkAchievements(statsForAch);
+    // Показуємо тости по черзі
+    newAchs.forEach((ach, i) => {
+        setTimeout(() => showAchievementToast(ach), i * 4000);
+    });
+
+    // Якщо ідеальний результат — конфеті при фіналі теж
+    if (hadPerfect) { spawnConfetti(); spawnStars(); }
+
+    // 4. ВІДОБРАЖЕННЯ ФІНАЛУ
+    const emoji = hadPerfect ? '🏆' : score >= currentQuizData.length / 2 ? '🏁' : '😅';
+    const gamePage = document.getElementById('game-page');
+    gamePage.innerHTML = `
+        <div class="question-anim" style="text-align:center; padding: 20px; width:100%; max-width:340px;">
+            <div style="font-size: 60px; margin-bottom: 20px;">${emoji}</div>
+            <h2 style="color:#4caf50; margin-bottom: 10px;">Квіз завершено!</h2>
+            <p style="font-size:1.2rem; margin-bottom:4px;">Правильних: <b>${score}/${currentQuizData.length}</b></p>
+            <p id="finish-points" style="font-size:2rem; font-weight:800; color:#ffd700; margin-bottom:4px; opacity:0;">+${newPoints} балів</p>
+            ${!user ? '<p style="color:#ff9800; font-size:12px;">⚠️ Зайдіть через меню бота, щоб зберегти бали</p>' : '<p style="color:#888; font-size:13px;">✅ Бали збережено</p>'}
+            <button class="list-btn" onclick="location.reload()" style="justify-content:center; background:#2a2a2a; border:none; width:100%; margin-top:16px;">
+                <span class="material-icons">home</span> НА ГОЛОВНУ
+            </button>
+        </div>
+    `;
+    // Анімація рахунку з затримкою
+    setTimeout(() => {
+        const el = document.getElementById('finish-points');
+        if (el) { el.classList.add('score-animated'); animateCount(el, newPoints); }
+    }, 300);
+}
+function playQuizMusic(url) {
+    const vinyl = document.getElementById('vinyl-element');
+    
+    // Якщо музика вже грає — зупиняємо її при повторному натисканні
+    if (currentAudio && !currentAudio.paused) {
+        currentAudio.pause();
+        if(vinyl) vinyl.classList.remove('vinyl-playing');
+        return;
+    }
+
+    // Створюємо новий об'єкт Audio, якщо посилання змінилося або його ще немає
+    if (!currentAudio || currentAudio.src !== url) {
+        currentAudio = new Audio(url);
+    }
+    
+    // Запускаємо відтворення
+    currentAudio.play().catch(e => console.error("Помилка відтворення:", e));
+    
+    // Додаємо клас анімації обертання
+    if(vinyl) vinyl.classList.add('vinyl-playing');
+
+    // Зупиняємо обертання, коли музика закінчиться
+    currentAudio.onended = () => {
+        if(vinyl) vinyl.classList.remove('vinyl-playing');
+    };
+}
+
+// ============================================================
+// ЗІРКИ / ІСКРИ при 100% результаті
+// ============================================================
+function spawnStars() {
+    const emojis = ['⭐','✨','🌟','💫','⚡'];
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    for (let i = 0; i < 20; i++) {
+        const el = document.createElement('div');
+        el.className = 'star-particle';
+        el.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+        const angle = (i / 20) * 360;
+        const dist  = 80 + Math.random() * 160;
+        const tx = Math.cos(angle * Math.PI/180) * dist + 'px';
+        const ty = Math.sin(angle * Math.PI/180) * dist + 'px';
+        const tr = (Math.random() * 360 - 180) + 'deg';
+        el.style.left = cx + 'px';
+        el.style.top  = cy + 'px';
+        el.style.setProperty('--tx', tx);
+        el.style.setProperty('--ty', ty);
+        el.style.setProperty('--tr', tr);
+        el.style.animationDelay = (Math.random() * 0.3) + 's';
+        document.body.appendChild(el);
+        el.addEventListener('animationend', () => el.remove());
+    }
+}
+
+// ============================================================
+// АНІМАЦІЯ ЛІЧИЛЬНИКА БАЛІВ
+// ============================================================
+function animateCount(el, target) {
+    const duration = 800;
+    const start = performance.now();
+    function step(now) {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const val = Math.round(eased * target);
+        el.textContent = '+' + val + ' балів';
+        el.style.opacity = 1;
+        if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+}
+
+// ============================================================
+// ПРОФІЛЬНА КАРТКА
+// ============================================================
+function showProfileCard() {
+    const username = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Гравець';
+    const total    = document.getElementById('p-total')?.innerText   || '0';
+    const month    = document.getElementById('p-month')?.innerText   || '0';
+    const count    = document.getElementById('p-count')?.innerText   || '0';
+    const rank     = document.getElementById('p-rank-text')?.innerText || '#—';
+    const percent  = document.getElementById('chart-percent')?.innerText || '0%';
+    const saved    = getLocalAchievements();
+    const achCount = ACHIEVEMENTS.filter(a => saved[a.id]).length;
+
+    // Досягнення "Поділитися статистикою"
+    const newAchs = checkAchievements({ sharedCard: true });
+    newAchs.forEach((ach, i) => setTimeout(() => showAchievementToast(ach), 1500 + i * 4000));
+
+    // Видаляємо старий якщо є
+    document.getElementById('profile-card-overlay')?.remove();
+
+    const colors = ['rgba(0,136,204,0.5)','rgba(255,215,0,0.4)','rgba(255,95,109,0.4)','rgba(76,175,80,0.4)'];
+    const particles = Array.from({length: 12}, () => {
+        const size  = (4 + Math.random() * 8).toFixed(1);
+        const left  = (Math.random() * 100).toFixed(1);
+        const dur   = (6 + Math.random() * 8).toFixed(1);
+        const delay = (Math.random() * 8).toFixed(1);
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        return `<div class="card-particle" style="width:${size}px;height:${size}px;left:${left}%;background:${color};animation-duration:${dur}s;animation-delay:-${delay}s;"></div>`;
+    }).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'profile-card-overlay';
+    overlay.innerHTML = `
+        <div id="profile-card-close" onclick="document.getElementById('profile-card-overlay').remove()">
+            <span class="material-icons" style="color:white;font-size:18px;">close</span>
+        </div>
+        ${particles}
+        <div id="profile-card-inner">
+            <div style="text-align:center; margin-bottom:20px;">
+                <div style="font-size:0.7rem; color:rgba(255,255,255,0.4); letter-spacing:3px; font-weight:700; margin-bottom:4px;">SHADE NEWS</div>
+                <div style="font-size:0.65rem; color:rgba(255,255,255,0.25);">центр ігрових новин</div>
+            </div>
+            <div style="font-size:1.6rem; font-weight:800; color:#fff; text-align:center; margin-bottom:6px;">${username}</div>
+            <div style="text-align:center; margin-bottom:20px;">
+                <div style="font-size:3.5rem; font-weight:800; background:linear-gradient(135deg,#ffd700,#ff9800); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1;">${rank}</div>
+                <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); margin-top:2px;">місце в рейтингу</div>
+            </div>
+            <div style="width:100%; max-width:320px; height:1px; background:rgba(255,255,255,0.08); margin-bottom:16px;"></div>
+            <div class="pcard-stat-grid" style="margin-bottom:12px;">
+                <div class="pcard-box" style="text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:800; color:#fff;">${total}</div>
+                    <div style="font-size:0.65rem; color:rgba(255,255,255,0.4); margin-top:2px;">Всього балів</div>
+                </div>
+                <div class="pcard-box" style="text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:800; color:#4caf50;">${month}</div>
+                    <div style="font-size:0.65rem; color:rgba(255,255,255,0.4); margin-top:2px;">За місяць</div>
+                </div>
+                <div class="pcard-box" style="text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:800; color:#0088cc;">${count}</div>
+                    <div style="font-size:0.65rem; color:rgba(255,255,255,0.4); margin-top:2px;">Квізів</div>
+                </div>
+                <div class="pcard-box" style="text-align:center;">
+                    <div style="font-size:1.4rem; font-weight:800; color:#ffd700;">${percent}</div>
+                    <div style="font-size:0.65rem; color:rgba(255,255,255,0.4); margin-top:2px;">Точність</div>
+                </div>
+            </div>
+            <div style="font-size:0.8rem; color:rgba(255,255,255,0.35); text-align:center; margin-bottom:24px;">
+                🏆 Досягнень: ${achCount}/${ACHIEVEMENTS.length}
+            </div>
+            <div style="font-size:0.65rem; color:rgba(255,255,255,0.2); text-align:center; letter-spacing:1px;">@shadenews_bot</div>
+            <div style="position:absolute; bottom:24px; left:0; right:0; text-align:center; font-size:0.75rem; color:rgba(255,255,255,0.25);">
+                📸 Зроби скрін і поділись!
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// ============================================================
+
+// ============================================================
+// БОНУСИ — РЕЙТИНГОВА СИСТЕМА
+// ============================================================
+
+// ⬇️ СЮДИ ВСТАВ посилання на таблицю з промокодами (CSV)
+const SHEET_PROMOS = APPS_SCRIPT_URL + '?sheet=' + encodeURIComponent('Промокоди');
+
+// Кеш промокодів щоб не завантажувати щоразу
+let _promoCacheData = null;
+
+async function loadPromoCodes() {
+    if (_promoCacheData) return _promoCacheData;
+    try {
+        const res = await fetch(SHEET_PROMOS);
+        if (!res.ok) throw new Error("Network response was not ok");
+        const jsonData = await res.json();
+        
+        const result = {};
+        
+        // jsonData виглядає як [{name: "PROMO1", content: "100", desc: "Опис"}, ...]
+        jsonData.forEach(item => {
+            const code = item.name.toUpperCase();
+            const reward = parseInt(item.content);
+            const desc = item.desc || '';
+            
+            if (code && !isNaN(reward)) {
+                result[code] = { reward, label: `+${reward} рейтингу`, desc };
+            }
+        });
+        
+        _promoCacheData = result;
+        return result;
+    } catch(e) {
+        console.error('Помилка завантаження промокодів:', e);
+        return {};
+    }
+}
+
+const TASKS = {
+    channel: { reward: 300, url: 'https://t.me/sh4denews' },
+    invite:  { reward: 150 },
+};
+
+// --- Supabase helpers для ratings ---
+async function getRating(userId) {
+    const { data } = await _supabase
+        .from('ratings')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+    return data;
+}
+
+async function addRating(userId, username, amount) {
+    const existing = await getRating(userId);
+    const current = existing?.rating || 0;
+    await _supabase.from('ratings').upsert({
+        user_id: userId,
+        username: username,
+        rating: current + amount
+    }, { onConflict: 'user_id' });
+    return current + amount;
+}
+
+async function openBonusPage() {
+    showPage('bonus');
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return;
+
+    try {
+        // Тільки свій рейтинг — без завантаження всього списку
+        const { data: top } = await _supabase
+            .from('ratings')
+            .select('user_id, rating')
+            .order('rating', { ascending: false });
+
+        const myData = top ? top.find(u => u.user_id == user.id) : null;
+        const myRating = myData?.rating || 0;
+        const myRank = myData ? (top.indexOf(myData) + 1) : '—';
+        document.getElementById('bonus-my-rating-val').innerText = myRating;
+        document.getElementById('bonus-my-rank-val').innerText = myRank !== '—' ? '#' + myRank : '—';
+
+        const ratingData = await getRating(user.id);
+        updateDailyBonusBtn(ratingData?.last_daily);
+
+        const done = ratingData?.tasks_done || [];
+        if (done.includes('channel')) {
+            const b = document.getElementById('task-channel-badge');
+            if (b) { b.innerText = '✅'; b.style.background = '#4caf50'; }
+            const btn = document.getElementById('task-channel');
+            if (btn) btn.style.opacity = '0.6';
+        }
+        if (done.includes('invite') || (ratingData?.referred_count >= 1)) {
+            const b = document.getElementById('task-invite-badge');
+            if (b) { b.innerText = '✅'; b.style.background = '#4caf50'; }
+        }
+    } catch(e) {
+        console.error('Помилка бонусів:', e);
+    }
+}
+
+async function openBonusRatingPage() {
+    showPage('bonus-rating');
+    const table = document.getElementById('bonus-rating-table');
+    table.innerHTML = '<div style="padding:30px;color:#666;text-align:center;">Завантаження...</div>';
+
+    try {
+        const { data: top } = await _supabase
+            .from('ratings')
+            .select('user_id, username, rating')
+            .order('rating', { ascending: false });
+
+        if (top && top.length > 0) {
+            table.innerHTML = top.map((u, i) => {
+                const rank = i + 1;
+                const rankClass = rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : '';
+                const icon = rank === 1
+                    ? '<span class="material-icons crown-1">emoji_events</span>'
+                    : rank === 2
+                    ? '<span class="material-icons crown-2">emoji_events</span>'
+                    : rank === 3
+                    ? '<span class="material-icons crown-3">emoji_events</span>'
+                    : `<span style="font-size:14px;opacity:0.5;">#</span>${rank}`;
+                return `
+                    <div class="leader-row ${rankClass}">
+                        <div class="leader-rank" style="display:flex;align-items:center;justify-content:center;width:40px;">${icon}</div>
+                        <div class="leader-name" style="${rank<=3?'font-weight:800;':''}">${escapeHtml(u.username||'Гравець')}</div>
+                        <div class="leader-score" style="color:#ffc371;">${u.rating||0}</div>
+                    </div>`;
+            }).join('');
+        } else {
+            table.innerHTML = '<div style="padding:30px;color:#666;text-align:center;">Рейтинг порожній</div>';
+        }
+    } catch(e) {
+        console.error('Помилка рейтингу:', e);
+        table.innerHTML = '<div style="padding:30px;color:#f44336;text-align:center;">Помилка завантаження</div>';
+    }
+}
+
+function updateDailyBonusBtn(lastDailyTs) {
+    const badge = document.getElementById('daily-bonus-badge');
+    const sub   = document.getElementById('daily-bonus-sub');
+    const btn   = document.getElementById('daily-bonus-btn');
+    if (!badge || !sub || !btn) return;
+
+    if (!lastDailyTs) return; // ще не брав — кнопка активна
+
+    const last = new Date(lastDailyTs);
+    const now  = new Date();
+    const diffH = (now - last) / 1000 / 3600;
+
+    if (diffH < 24) {
+        const nextMs = 24*3600*1000 - (now - last);
+        const h = Math.floor(nextMs/3600000);
+        const m = Math.floor((nextMs%3600000)/60000);
+        badge.innerText = `${h}г ${m}хв`;
+        badge.style.background = '#555';
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.6';
+        sub.innerText = 'Наступний бонус через ' + h + 'г ' + m + 'хв';
+    } else {
+        // Минуло 24+ годин — повертаємо кнопку в активний стан
+        // (раніше цієї гілки не було, і кнопка лишалась заблокованою назавжди)
+        badge.innerText = 'ЗАБРАТИ';
+        badge.style.background = '#4caf50';
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
+        sub.innerText = '+20 рейтингу щодня';
+    }
+}
+
+async function claimDailyBonus() {
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return tg.showAlert('Зайди через бота!');
+
+    const ratingData = await getRating(user.id);
+    if (ratingData?.last_daily) {
+        const diffH = (new Date() - new Date(ratingData.last_daily)) / 3600000;
+        if (diffH < 24) return;
+    }
+
+    const newRating = await addRating(user.id, user.username || user.first_name || 'Гравець', 20);
+    await _supabase.from('ratings').upsert({
+        user_id: user.id,
+        username: user.username || user.first_name,
+        rating: newRating,
+        last_daily: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+
+    tg.HapticFeedback.notificationOccurred('success');
+    tg.showAlert('🎉 +20 рейтингу отримано!');
+    openBonusPage();
+}
+
+// --- ПРОМОКОДИ ---
+function openPromoPage() { showPage('promo'); document.getElementById('promo-result').innerText = ''; }
+
+async function submitPromo() {
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return tg.showAlert('Зайди через бота!');
+
+    const code = document.getElementById('promo-input').value.trim().toUpperCase();
+    if (!code) return;
+
+    const resultEl = document.getElementById('promo-result');
+    resultEl.innerHTML = '<span style="color:#888;">Перевірка...</span>';
+
+    const promoCodes = await loadPromoCodes();
+
+    if (!promoCodes[code]) {
+        resultEl.innerHTML = '<span style="color:#f44336;">❌ Невірний промокод</span>';
+        tg.HapticFeedback.notificationOccurred('error');
+        return;
+    }
+
+    const promo = promoCodes[code];
+
+    const ratingData = await getRating(user.id);
+    const usedPromos = ratingData?.used_promos || [];
+    if (usedPromos.includes(code)) {
+        resultEl.innerHTML = '<span style="color:#ff9800;">⚠️ Цей промокод вже використано</span>';
+        return;
+    }
+
+    const newRating = await addRating(user.id, user.username || user.first_name || 'Гравець', promo.reward);
+    await _supabase.from('ratings').upsert({
+        user_id: user.id,
+        rating: newRating,
+        used_promos: [...usedPromos, code]
+    }, { onConflict: 'user_id' });
+
+    tg.HapticFeedback.notificationOccurred('success');
+    resultEl.innerHTML = `<span style="color:#4caf50;">✅ ${promo.label} додано!</span>`;
+    document.getElementById('promo-input').value = '';
+    _promoCacheData = null; // скидаємо кеш
+}
+
+// --- РЕФЕРАЛЬНА СИСТЕМА ---
+function openReferralPage() {
+    showPage('referral');
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return;
+
+    const refLink = `https://t.me/shadenews_bot?start=ref_${user.id}`;
+    document.getElementById('ref-link-box').innerText = refLink;
+
+    // Кількість запрошених
+    _supabase.from('ratings')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('referred_by', user.id)
+        .then(({ count }) => {
+            document.getElementById('ref-count').innerText = count || 0;
+        });
+}
+
+function copyRefLink() {
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return;
+    const link = `https://t.me/shadenews_bot?start=ref_${user.id}`;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(() => tg.showAlert('✅ Посилання скопійовано!'));
+    } else {
+        tg.showAlert(link);
+    }
+    tg.HapticFeedback.impactOccurred('medium');
+}
+
+function shareRefLink() {
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return;
+    const link = `https://t.me/shadenews_bot?start=ref_${user.id}`;
+    const text = `🎮 Грай у квізи про ігри разом зі мною в Shade News!
+${link}`;
+    try { tg.shareURL(link, text); } catch(e) { tg.showAlert(text); }
+}
+
+// --- ЗАВДАННЯ ---
+async function claimTask(taskId) {
+    const user = tg.initDataUnsafe?.user;
+    if (!user) return tg.showAlert('Зайди через бота!');
+
+    const ratingData = await getRating(user.id);
+    const done = ratingData?.tasks_done || [];
+
+    // Вже виконано — нічого не робимо
+    if (done.includes(taskId)) {
+        tg.showAlert('✅ Завдання вже виконано!');
+        return;
+    }
+
+    if (taskId === 'channel') {
+        const badge = document.getElementById('task-channel-badge');
+
+        // Крок 1: відкриваємо канал (не закриває Mini App)
+        tg.openTelegramLink('https://t.me/sh4denews');
+
+        // Крок 2: змінюємо кнопку на "Перевірити"
+        if (badge) {
+            badge.innerText = 'ПЕРЕВІРИТИ';
+            badge.style.background = '#0088cc';
+        }
+        const btn = document.getElementById('task-channel');
+        if (btn) btn.onclick = () => checkChannelSubscription(user, done);
+    }
+}
+
+async function checkChannelSubscription(user, done) {
+    const badge = document.getElementById('task-channel-badge');
+    if (badge) { badge.innerText = '...'; badge.style.background = '#555'; }
+
+    try {
+        // Перевіряємо підписку через Supabase Edge Function або бота
+        const res = await fetch(`https://mdkupzrojmulqernsspo.supabase.co/functions/v1/check-subscription`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ka3VwenJvam11bHFlcm5zc3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2ODY2MjksImV4cCI6MjA4NzI2MjYyOX0.N0NWe4ANf2hm-zUFhlCM6dV_8daTIOJWRnx-5e4uxdc`
+            },
+            body: JSON.stringify({ user_id: user.id })
+        });
+        const result = await res.json();
+
+        if (result.subscribed) {
+            // Підписаний — нараховуємо рейтинг
+            const reward = TASKS.channel.reward;
+            const newRating = await addRating(user.id, user.username || user.first_name || 'Гравець', reward);
+            await _supabase.from('ratings').upsert({
+                user_id: user.id,
+                rating: newRating,
+                tasks_done: [...done, 'channel']
+            }, { onConflict: 'user_id' });
+
+            tg.HapticFeedback.notificationOccurred('success');
+            if (badge) { badge.innerText = '✅'; badge.style.background = '#4caf50'; }
+            const btn = document.getElementById('task-channel');
+            if (btn) { btn.style.opacity = '0.6'; btn.onclick = null; }
+            tg.showAlert(`🎉 +${reward} рейтингу за підписку!`);
+            openBonusPage();
+        } else {
+            // Не підписаний
+            tg.HapticFeedback.notificationOccurred('error');
+            if (badge) { badge.innerText = 'ПЕРЕВІРИТИ'; badge.style.background = '#0088cc'; }
+            tg.showAlert('❌ Ти ще не підписаний на @sh4denews. Підпишись і натисни "Перевірити"!');
+        }
+    } catch(e) {
+        console.error('Помилка перевірки підписки:', e);
+        if (badge) { badge.innerText = 'ПЕРЕВІРИТИ'; badge.style.background = '#0088cc'; }
+        tg.showAlert('Помилка перевірки. Спробуй ще раз.');
+    }
+}
+
+// PULL-TO-REFRESH для сторінки quiz-list
+// ============================================================
+(function() {
+    const THRESHOLD = 70;   // px — скільки треба потягнути щоб спрацювало
+    const MAX_PULL   = 100;  // px — максимальна відстань тягнення
+
+    let startY = 0, currentY = 0, pulling = false;
+
+    function getPage() { return document.getElementById('quiz-list-page'); }
+    function getIndicator() { return document.getElementById('ptr-indicator'); }
+
+    function onTouchStart(e) {
+        const page = getPage();
+        if (!page || !page.classList.contains('active')) return;
+        if (page.scrollTop > 0) return; // тільки якщо вгорі
+        startY = e.touches[0].clientY;
+        pulling = true;
+    }
+
+    function onTouchMove(e) {
+        if (!pulling) return;
+        const page = getPage();
+        if (!page || page.scrollTop > 0) { pulling = false; return; }
+
+        currentY = e.touches[0].clientY;
+        const delta = Math.min(currentY - startY, MAX_PULL);
+        if (delta <= 0) return;
+
+        e.preventDefault();
+
+        const indicator = getIndicator();
+        const progress = delta / THRESHOLD;
+        const translateY = Math.min(delta * 0.5, 50);
+
+        indicator.style.opacity = Math.min(progress, 1);
+        indicator.style.transform = `translateX(-50%) translateY(${translateY}px)`;
+        indicator.querySelector('.material-icons').style.transform = `rotate(${delta * 3}deg)`;
+
+        if (delta >= THRESHOLD) {
+            indicator.classList.add('ptr-ready');
+        } else {
+            indicator.classList.remove('ptr-ready');
+        }
+    }
+
+    function onTouchEnd() {
+        if (!pulling) return;
+        pulling = false;
+
+        const delta = currentY - startY;
+        const indicator = getIndicator();
+
+        if (delta >= THRESHOLD) {
+            // Запускаємо оновлення
+            indicator.classList.remove('ptr-ready');
+            indicator.classList.add('ptr-loading');
+            indicator.style.opacity = '1';
+            indicator.style.transform = 'translateX(-50%) translateY(20px)';
+
+            // Перезавантажуємо поточний список
+            if (window._lastSheetUrl && window._lastSheetTitle !== undefined) {
+                loadQuizzesFromSheet(window._lastSheetUrl, window._lastSheetTitle, window._lastArchiveMode || false)
+                    .finally(() => resetIndicator(indicator));
+            } else {
+                setTimeout(() => resetIndicator(indicator), 800);
+            }
+        } else {
+            resetIndicator(indicator);
+        }
+
+        startY = 0; currentY = 0;
+    }
+
+    function resetIndicator(indicator) {
+        indicator.classList.remove('ptr-ready', 'ptr-loading');
+        indicator.style.transition = 'opacity 0.3s, transform 0.3s';
+        indicator.style.opacity = '0';
+        indicator.style.transform = 'translateX(-50%) translateY(-60px)';
+        setTimeout(() => { indicator.style.transition = ''; }, 350);
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove',  onTouchMove,  { passive: false });
+    document.addEventListener('touchend',   onTouchEnd,   { passive: true });
+})();
+
+let myChart = null;
+
+function updateChart(correct, wrong) {
+    const ctx = document.getElementById('statsChart').getContext('2d');
+    const total = correct + wrong;
+    const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
+    document.getElementById('chart-percent').innerText = percent + "%";
+
+    if (myChart) myChart.destroy();
+
+    myChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Правильно', 'Неправильно'],
+            datasets: [{
+                data: [correct || 1, wrong || 0], // Щоб не був пустим при 0
+                backgroundColor: ['#4caf50', '#f44336'],
+                borderWidth: 0,
+                cutout: '80%'
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+    </script>
+</body>
+</html>
