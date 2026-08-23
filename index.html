@@ -73,7 +73,6 @@
         .page::-webkit-scrollbar { display: none; }
         .page.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
         
-        /* ЗМІНЕНО: тепер сторінка вирівнюється по верхньому краю */
         #home-page { justify-content: flex-start; padding-top: 24px; position: relative; }
 
         .timer-container {
@@ -120,12 +119,6 @@
         }
 
         .logo { width: 90px; margin-bottom: 15px; border-radius: 20px; }
-        .main-action-btn {
-            width: 180px; height: 180px; border-radius: 50%; border: none;
-            background: #f0f0f0; color: #000; font-weight: 800; font-size: 1.2rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3); transition: 0.2s; flex-shrink: 0;
-        }
-        .main-action-btn:active { transform: scale(0.9); background: #0088cc; color: white; }
 
         .more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 340px; flex-shrink: 0; }
         .grid-item { border-radius: 24px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
@@ -271,41 +264,6 @@
             display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(0,136,204,0.1));
             border: 1px solid rgba(255,215,0,0.3); border-radius: 16px; padding: 14px 18px; width: 100%; max-width: 340px; flex-shrink: 0; margin-bottom: 15px;
         }
-
-        /* ===== СТИЛІ ДЛЯ НОВОЇ СТРІЧКИ НОВИН (ГОЛОВНА СТОРІНКА) ===== */
-        .top-actions {
-            position: absolute; top: 20px; right: 20px; display: flex; gap: 8px; z-index: 50;
-        }
-        .top-action-btn {
-            width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center;
-            color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.05); transition: 0.2s; cursor: pointer;
-        }
-        .top-action-btn:active { background: rgba(255,255,255,0.15); transform: scale(0.9); }
-        
-        .news-card {
-            background: #2a2a2a; border: 1px solid #333; border-radius: 20px; overflow: hidden;
-            position: relative; text-align: left; margin-bottom: 15px; cursor: pointer;
-            transition: transform 0.15s ease; flex-shrink: 0;
-        }
-        .news-card:active { transform: scale(0.96); }
-        
-        .news-img {
-            width: 100%; height: 160px; object-fit: cover; background: #222;
-        }
-        
-        .news-body {
-            padding: 16px; position: relative; max-height: 120px; overflow: hidden;
-        }
-        
-        .news-text {
-            font-size: 0.85rem; color: #ddd; line-height: 1.5; margin: 0;
-        }
-        
-        .news-fade {
-            position: absolute; bottom: 0; left: 0; right: 0; height: 50px;
-            background: linear-gradient(to bottom, rgba(42,42,42,0), #2a2a2a 90%); pointer-events: none;
-        }
     </style>
 </head>
 <body>
@@ -315,38 +273,19 @@
         <div style="font-weight:700;">Зачекайте будь ласка...</div>
     </div>
 
-    <!-- ===== ОНОВЛЕНА ГОЛОВНА СТОРІНКА ===== -->
+    <!-- ===== ОНОВЛЕНА ГОЛОВНА СТОРІНКА З МЕНЮ ===== -->
     <div id="home-page" class="page active">
-        
-        <!-- Прозорі кнопки вгорі справа -->
-        <div class="top-actions">
-            <div class="top-action-btn" onclick="handleLink('https://t.me/sh4denews')">
-                <span class="material-icons" style="font-size:18px;">near_me</span>
-            </div>
-            <div class="top-action-btn" onclick="refreshNews()">
-                <span class="material-icons" id="refresh-icon" style="font-size:18px;">refresh</span>
-            </div>
-        </div>
-
         <!-- Шапка -->
         <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0; text-align:left;">
             <img src="Logotype.jpg" style="width:48px; height:48px; border-radius:14px; margin-right:12px; border:1px solid #333;">
             <div>
                 <h1 style="font-weight:800; font-size:1.3rem; margin:0;">Shade News</h1>
-                <div style="color:#888; font-size:0.8rem; margin-top:2px;">Стрічка новин</div>
+                <div style="color:#888; font-size:0.8rem; margin-top:2px;">центр ігрових новин</div>
             </div>
         </div>
 
-        <!-- Контейнер стрічки новин (генерується через JS) -->
-        <div id="news-feed-container" style="width:100%; max-width:340px;">
-            <!-- Картки вставляються тут -->
-        </div>
-
-    </div>
-
-    <div id="more-page" class="page">
-        <h2 style="margin-bottom:20px; font-weight:800;">МЕНЮ</h2>
-        <div class="more-grid">
+        <!-- Головне меню (Сітка) -->
+        <div class="more-grid" style="margin-top: 10px;">
             <div class="grid-item" onclick="showPage('quiz-cats')" style="background: linear-gradient(135deg, #6a11cb, #2575fc); grid-row: span 2; height:280px;">
                 <span class="material-icons" style="font-size:40px;">help_outline</span><b>ВІКТОРИНИ</b>
             </div>
@@ -374,9 +313,22 @@
         </div>
     </div>
 
+    <!-- ===== ОНОВЛЕНА ВСТАВКА "ЩЕ" (У РОЗРОБЦІ) ===== -->
+    <div id="more-page" class="page">
+        <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0; justify-content: space-between;">
+            <h2 style="margin:0; font-weight:800;">Додатково</h2>
+        </div>
+        
+        <div style="width:100%; max-width:340px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:20px; padding:30px 20px; text-align:center;">
+             <span class="material-icons" style="font-size: 48px; color: #555; margin-bottom: 10px;">construction</span>
+             <h3 style="margin:0 0 10px 0; color: #ddd;">Розділ у розробці</h3>
+             <p style="margin:0; font-size: 0.85rem; color: #888;">Незабаром тут з'являться нові цікаві функції!</p>
+        </div>
+    </div>
+
     <div id="top-page" class="page">
         <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0;">
-            <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+            <span class="material-icons" onclick="showPage('home')">arrow_back</span>
             <h2 style="margin:0; margin-left:15px;">Рейтинг</h2>
         </div>
         <div class="tabs-header">
@@ -391,7 +343,7 @@
     <!-- СТОРІНКА БОНУСІВ -->
     <div id="bonus-page" class="page">
         <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink:0;">
-            <span class="material-icons" onclick="showPage('more')" style="cursor:pointer;">arrow_back</span>
+            <span class="material-icons" onclick="showPage('home')" style="cursor:pointer;">arrow_back</span>
             <h2 style="margin:0; margin-left:15px;">🎁 Бонуси</h2>
         </div>
 
@@ -579,7 +531,7 @@
 
 <div id="profile-page" class="page">
     <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0;">
-        <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+        <span class="material-icons" onclick="showPage('home')">arrow_back</span>
         <h2 style="margin:0; margin-left:15px;">Мій профіль</h2>
     </div>
 
@@ -631,7 +583,7 @@
 
     <div id="quiz-cats-page" class="page">
         <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; position:relative; flex-shrink: 0;">
-            <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+            <span class="material-icons" onclick="showPage('home')">arrow_back</span>
             <h2 style="margin:0; margin-left:15px;">Вікторини</h2>
             <div class="archive-btn" onclick="loadQuizzesFromSheet('Архів', 'Архів квізів', true)">
                 <span class="material-icons" style="font-size:16px;">archive</span> Архів
@@ -673,7 +625,7 @@
     <!-- СТОРІНКА СТАТИСТИКИ ДЛЯ АДМІНА -->
     <div id="admin-stats-page" class="page">
         <div style="width:100%; max-width:340px; display:flex; align-items:center; margin-bottom:20px; flex-shrink:0;">
-            <span class="material-icons" onclick="showPage('more')">arrow_back</span>
+            <span class="material-icons" onclick="showPage('home')">arrow_back</span>
             <h2 style="margin:0; margin-left:15px;">📊 Статистика</h2>
         </div>
 
@@ -713,18 +665,14 @@
             <span style="font-size:10px; color:#888; margin-top:5px;">Підтримка</span>
         </div>
         <div class="nav-item" id="n-more" onclick="showPage('more')"><span class="material-icons">menu</span><span>Ще</span></div>
-        
     </nav>
 
     <script>
-        
-        // ВИПРАВЛЕННЯ: Змінні перенесені на самий початок
         let isArchiveView = false;
         let currentQuizData = [], step = 0, score = 0, currentQuizName = "";
         let timeLeft = 10, timerInterval = null, canAnswer = true;
 
         const tg = window.Telegram.WebApp;
-        // ЗАМІНИ ТУТ URL НА СВІЙ З GOOGLE APPS SCRIPT
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN37dG-rfa5ok1l5Yoiz1EtF8dV64w0IUX-bmZsEcMFRn0dioQFabRQD9RYmYZDJKT/exec';
         
         const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQz8eglMYnxPGGVysibaeQOxqN8qWZdNi88NWoXVgjx75JEeXIwlO8Ib6h5RgA8rxANftn1xF1Ml0A9/pub?output=csv';
@@ -734,27 +682,17 @@
         const SB_URL = 'https://mdkupzrojmulqernsspo.supabase.co';
         const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ka3VwenJvam11bHFlcm5zc3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2ODY2MjksImV4cCI6MjA4NzI2MjYyOX0.N0NWe4ANf2hm-zUFhlCM6dV_8daTIOJWRnx-5e4uxdc';
 
-        // ID адміністраторів (такі самі як у main.py)
         const ADMIN_IDS = [2005493244, 1733525891];
         
-        // Тепер Supabase створиться без помилок
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
         
         tg.expand();
 
-        // Ініціалізація новин при старті
-        document.addEventListener("DOMContentLoaded", () => {
-            renderRealNews();
-        });
-
-        // Перевіряємо чи адмін і показуємо кнопку
         const currentUser = tg.initDataUnsafe?.user;
         if (currentUser && ADMIN_IDS.includes(currentUser.id)) {
             document.getElementById('admin-stats-btn').style.display = 'flex';
         }
 
-        // Захист від XSS: ім'я користувача (first_name) може містити будь-які символи,
-        // тому перед вставкою в innerHTML його треба екранувати.
         function escapeHtml(str) {
             return String(str ?? '').replace(/[&<>"']/g, (c) => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -770,7 +708,7 @@
             if(target) target.classList.add('active');
             
             document.getElementById('n-home').classList.toggle('active', id === 'home');
-            document.getElementById('n-more').classList.toggle('active', id !== 'home');
+            document.getElementById('n-more').classList.toggle('active', id === 'more');
             if(id !== 'game') clearInterval(timerInterval);
         }
 
@@ -781,73 +719,6 @@
                 tg.openLink(url);
             }
         }
-
-    async function renderRealNews() {
-    const container = document.getElementById('news-feed-container');
-    if (!container) return;
-
-    container.innerHTML = '<div style="padding:30px; color:#888; text-align:center;"><div class="loader-spin" style="margin:0 auto 10px auto; width:30px; height:30px;"></div>Отримуємо новини...</div>';
-
-    try {
-        // Звертаємося до нашої бази, яка ніколи не блокується
-        const { data: posts, error } = await _supabase
-            .from('news')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(5);
-
-        if (error) throw error;
-
-        if (!posts || posts.length === 0) {
-            container.innerHTML = '<div style="padding:20px; color:#666; text-align:center;">Новин поки немає</div>';
-            return;
-        }
-
-        // Генеруємо картки
-        container.innerHTML = posts.map(post => {
-            // Звична обробка рядків: чистимо зайве і замінюємо перенесення
-            let cleanText = post.text ? post.text.replace(/\n/g, '<br>').trim() : 'Новий пост 🎮';
-            
-            // Обрізаємо занадто довгий текст
-            if (cleanText.length > 200) {
-                cleanText = cleanText.substring(0, 200) + '...';
-            }
-
-            // Якщо картинки немає в базі, ставимо дефолтну
-            const imgUrl = post.image_url || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80';
-            
-            // Формуємо посилання на конкретний пост
-            const postLink = post.message_id ? `https://t.me/sh4denews/${post.message_id}` : 'https://t.me/sh4denews';
-
-            return `
-                <div class="news-card" onclick="handleLink('${postLink}')">
-                    <img src="${imgUrl}" class="news-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=600&q=80'">
-                    <div class="news-body">
-                        <p class="news-text">${cleanText}</p>
-                        <div class="news-fade"></div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-    } catch (e) {
-        console.error('Помилка Supabase новин:', e);
-        container.innerHTML = '<div style="padding:20px; color:#f44336; text-align:center;">Не вдалося завантажити стрічку.</div>';
-    }
-}
-
-        function refreshNews() {
-    const icon = document.getElementById('refresh-icon');
-    if(icon) icon.style.animation = 'spin 1s linear infinite';
-    
-    renderRealNews().finally(() => {
-        if(icon) icon.style.animation = 'none';
-        try { tg.HapticFeedback.notificationOccurred('success'); } catch(e){}
-    });
-}
-        
-// 1. Функція відкриття вкладки ТОП (тепер вона сама завантажує дані)
-// --- ЦЕЙ БЛОК ПОВНІСТЮ ЗАМІНЮЄ СТАРІ ФУНКЦІЇ ТОПУ ТА ПРОФІЛЮ ---
 
 function sendTopCommand() {
     showPage('top');
@@ -905,8 +776,6 @@ async function switchTopTab(type) {
                 `;
             }).join('');
 
-            // Вішаємо обробники через addEventListener замість onclick з підстановкою рядків —
-            // так ім'я користувача ніколи не потрапляє напряму в атрибут HTML.
             container.querySelectorAll('.top-row-clickable').forEach(row => {
                 row.addEventListener('click', () => {
                     openPlayerProfile(row.dataset.userId, row.dataset.username, parseInt(row.dataset.rank, 10));
@@ -1011,7 +880,6 @@ async function sendProfileCommand() {
 
         const totalPts = player?.total_points || 0;
 
-        // Рейтингове місце: скільки гравців мають більше балів
         const { count: rankCount } = await _supabase
             .from('players')
             .select('*', { count: 'exact', head: true })
@@ -1025,7 +893,6 @@ async function sendProfileCommand() {
             updateChart(player.total_correct_answers || 0, player.total_wrong_answers || 0);
         }
 
-        // Показуємо місце в рейтингу
         const rankBadge = document.getElementById('p-rank-badge');
         const rankIcon = document.getElementById('p-rank-icon');
         const rankText = document.getElementById('p-rank-text');
@@ -1039,7 +906,6 @@ async function sendProfileCommand() {
             else { rankIcon.innerText = '📊'; rankSub.innerText = `Загальний рейтинг`; }
         }
 
-        // Рейтинг з бонусів
         let userRating = 0, rankRating = 0;
         try {
             const ratingData = await getRating(user.id);
@@ -1050,7 +916,6 @@ async function sendProfileCommand() {
             rankRating = (ratRankCount || 0) + 1;
         } catch(e) {}
 
-        // Досягнення
         const statsForAch = {
             quizCount: quizCount || 0,
             total_points: totalPts,
@@ -1067,12 +932,10 @@ async function sendProfileCommand() {
         renderAchievementsGrid({});
     }
 }
-// --- КІНЕЦЬ БЛОКУ ---
 
 async function openAdminStats() {
     showPage('admin-stats');
 
-    // Скидаємо до стану завантаження
     document.getElementById('as-total-users').innerText = '—';
     document.getElementById('as-active-month').innerText = '—';
     document.getElementById('as-active-today').innerText = '—';
@@ -1080,39 +943,33 @@ async function openAdminStats() {
     document.getElementById('as-top-quizzes').innerHTML = '<div style="padding:30px; color:#666; text-align:center;">Завантаження...</div>';
 
     try {
-        const currentMonth = new Date().toISOString().slice(0, 7); // "2026-03"
-        const today = new Date().toISOString().slice(0, 10);       // "2026-03-17"
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const today = new Date().toISOString().slice(0, 10);
 
-        // 1. Загальна кількість гравців
         const { count: totalUsers } = await _supabase
             .from('players')
             .select('*', { count: 'exact', head: true });
 
-        // 2. Активні цього місяця (є monthly_points > 0 і last_month = поточний)
         const { count: activeMonth } = await _supabase
             .from('players')
             .select('*', { count: 'exact', head: true })
             .eq('last_month', currentMonth)
             .gt('monthly_points', 0);
 
-        // 3. Активні сьогодні — квізи пройдені сьогодні (якщо є created_at)
         const { count: activeToday } = await _supabase
             .from('completed_quizzes')
             .select('user_id', { count: 'exact', head: true })
             .gte('created_at', today + 'T00:00:00')
             .lte('created_at', today + 'T23:59:59');
 
-        // 4. Всього пройдених квізів
         const { count: totalQuizzes } = await _supabase
             .from('completed_quizzes')
             .select('*', { count: 'exact', head: true });
 
-        // 5. Топ квізів за кількістю проходжень
         const { data: quizRows } = await _supabase
             .from('completed_quizzes')
             .select('quiz_id');
 
-        // Рахуємо вручну (Supabase anon не підтримує GROUP BY напряму)
         const quizCounts = {};
         (quizRows || []).forEach(r => {
             const id = r.quiz_id || 'Невідомо';
@@ -1122,13 +979,11 @@ async function openAdminStats() {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10);
 
-        // Відображаємо числа
         document.getElementById('as-total-users').innerText = totalUsers || 0;
         document.getElementById('as-active-month').innerText = activeMonth || 0;
         document.getElementById('as-active-today').innerText = activeToday || 0;
         document.getElementById('as-total-quizzes').innerText = totalQuizzes || 0;
 
-        // Відображаємо топ квізів
         const topContainer = document.getElementById('as-top-quizzes');
         if (top10.length > 0) {
             topContainer.innerHTML = top10.map(([name, count], i) => `
@@ -1181,7 +1036,6 @@ async function openAdminStats() {
             } catch (e) {}
         });
 
-// Оновлена функція завантаження для старого формату (Рядок = 1 Квіз)
 async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
     isArchiveView = archiveMode;
     window._lastSheetUrl    = sheetName; 
@@ -1194,7 +1048,6 @@ async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
         const user = tg.initDataUnsafe?.user;
         let completedIds = {};
 
-        // Історія з Supabase
         if (user && !isArchiveView) {
             const { data: history } = await _supabase
                 .from('completed_quizzes')
@@ -1205,7 +1058,6 @@ async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
             }
         }
 
-        // Запит до Apps Script
         const res = await fetch(`${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`);
         if (!res.ok) throw new Error("Помилка мережі");
         
@@ -1214,7 +1066,7 @@ async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
         const container = document.getElementById('sheet-quizzes-container');
         container.innerHTML = `
             <div style="display:flex; align-items:center; margin-bottom:20px; flex-shrink: 0;">
-                <span class="material-icons" onclick="showPage('quiz-cats')">arrow_back</span>
+                <span class="material-icons" onclick="showPage('home')">arrow_back</span>
                 <h2 style="margin:0; margin-left:15px;">${title}</h2>
             </div>
         `;
@@ -1227,7 +1079,6 @@ async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
 
         let parsedQuizzes = [];
         
-        // Парсимо JSON (кожен елемент - це один рядок з таблиці = 1 квіз)
         jsonData.forEach(item => {
             let name = item.name;
             let quizContent = item.content;
@@ -1246,13 +1097,10 @@ async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
             });
         });
 
-        // СОРТУВАННЯ: Пройдені (isDone: true) йдуть у кінець
         parsedQuizzes.sort((a, b) => (a.isDone === b.isDone) ? 0 : a.isDone ? 1 : -1);
                 
-        // ВІДОБРАЖЕННЯ КАРТОК
         parsedQuizzes.forEach(quiz => {
             let name = quiz.fullName;
-            // Рахуємо кількість запитань (розділених крапкою з комою)
             const questionsCount = quiz.content.split(';').filter(q => q.trim().length > 0).length;
 
             let difficultyText = "Звичайний";
@@ -1298,7 +1146,7 @@ async function loadQuizzesFromSheet(sheetName, title, archiveMode = false) {
             if (!quiz.isDone) {
                 btn.onclick = () => {
                     window.currentQuizId = quiz.cleanId; 
-                    initGame(quiz.fullName, quiz.content); // Використовуємо стару добру initGame!
+                    initGame(quiz.fullName, quiz.content); 
                     window.currentPointsMultiplier = pointsPerAnswer; 
                 };
             }
@@ -1327,7 +1175,6 @@ function renderStep() {
 
     const gamePage = document.getElementById('game-page');
 
-    // Якщо вже є контент — спочатку slide-out, потім рендеримо новий
     const existing = gamePage.querySelector('.game-content');
     if (existing) {
         existing.classList.add('question-exit');
@@ -1385,31 +1232,26 @@ function stopMusic() {
     if(vinyl) vinyl.classList.remove('vinyl-playing');
 }
 
-// Стара функція, залишена для сумісності з іншими сторінками/архівами
 function initGame(name, rawData) {
     currentQuizName = name;
     currentQuizData = rawData.split(';').map(q => {
         let parts = q.split('|').map(p => p.trim());
         
-        // 1. Шукаємо посилання і витягуємо його
         const mediaIndex = parts.findIndex(p => p.startsWith('http'));
         let mediaUrl = null;
         if (mediaIndex !== -1) {
             mediaUrl = parts[mediaIndex];
-            parts.splice(mediaIndex, 1); // Видаляємо URL, щоб він не став кнопкою
+            parts.splice(mediaIndex, 1); 
         }
 
-        // 2. Перший елемент, що залишився — це питання
         const questionText = parts[0] || "Вгадайте, що це?";
         
-        // 3. Наступні 4 елементи — це варіанти відповідей
-        // Це виправить проблему, коли "Питання" потрапляє в кнопки
         const options = parts.slice(1, 5); 
 
         return { 
             q: questionText, 
             options: options, 
-            correct: options[0], // Перший варіант вважаємо правильним
+            correct: options[0], 
             media: mediaUrl 
         };
     });
@@ -1419,28 +1261,19 @@ function initGame(name, rawData) {
     renderStep();
 }
 
-// ============================================================
-// ДОСЯГНЕННЯ — визначення
-// ============================================================
 const ACHIEVEMENTS = [
-    // Квізи
     { id: 'quiz_3',       icon: '🎮', title: '3 квізи',          desc: 'Пройди 3 квізи',                        check: (s) => s.quizCount >= 3 },
     { id: 'quiz_10',      icon: '🔥', title: '10 квізів',         desc: 'Пройди 10 квізів',                      check: (s) => s.quizCount >= 10 },
     { id: 'quiz_25',      icon: '💎', title: '25 квізів',         desc: 'Пройди 25 квізів',                      check: (s) => s.quizCount >= 25 },
-    // Бали
     { id: 'pts_50',       icon: '⚡', title: '50 балів',          desc: 'Набери 50 балів',                       check: (s) => s.total_points >= 50 },
     { id: 'pts_150',      icon: '💫', title: '150 балів',         desc: 'Набери 150 балів',                      check: (s) => s.total_points >= 150 },
     { id: 'pts_400',      icon: '🚀', title: '400 балів',         desc: 'Набери 400 балів',                      check: (s) => s.total_points >= 400 },
-    // Майстерність
     { id: 'perfect',      icon: '⭐', title: 'Перфекціоніст',    desc: '100% у будь-якому квізі',               check: (s) => s.hadPerfect },
     { id: 'shared',       icon: '📸', title: 'Зірка соцмереж',   desc: 'Поділитися статистикою',                check: (s) => s.sharedCard },
-    // Топ по балах
     { id: 'pts_top5',     icon: '🏅', title: 'Еліта балів',      desc: 'Топ-5 рейтингу по балах',               check: (s) => s.rankPoints <= 5 && s.rankPoints > 0 },
     { id: 'pts_top3',     icon: '🥉', title: 'Подіум балів',     desc: 'Топ-3 рейтингу по балах',               check: (s) => s.rankPoints <= 3 && s.rankPoints > 0 },
-    // Топ по рейтингу (бонуси)
     { id: 'rat_top5',     icon: '🌟', title: 'Еліта рейтингу',   desc: 'Топ-5 рейтингу в Бонусах',             check: (s) => s.rankRating <= 5 && s.rankRating > 0 },
     { id: 'rat_top3',     icon: '👑', title: 'Подіум рейтингу',  desc: 'Топ-3 рейтингу в Бонусах',             check: (s) => s.rankRating <= 3 && s.rankRating > 0 },
-    // Рейтинг (бонуси)
     { id: 'rat_1000',     icon: '🎯', title: '1000 рейтингу',    desc: 'Набери 1000 рейтингу в Бонусах',       check: (s) => s.userRating >= 1000 },
     { id: 'rat_2500',     icon: '💠', title: '2500 рейтингу',    desc: 'Набери 2500 рейтингу в Бонусах',       check: (s) => s.userRating >= 2500 },
     { id: 'rat_7000',     icon: '🔱', title: '7000 рейтингу',    desc: 'Набери 7000 рейтингу в Бонусах',       check: (s) => s.userRating >= 7000 },
@@ -1453,7 +1286,6 @@ function saveLocalAchievements(obj) {
     try { localStorage.setItem('sn_achievements', JSON.stringify(obj)); } catch {}
 }
 
-// Перевіряє і нараховує нові досягнення, повертає масив нових
 function checkAchievements(stats) {
     const saved = getLocalAchievements();
     const newlyUnlocked = [];
@@ -1486,7 +1318,6 @@ function renderAchievementsGrid(stats) {
     }).join('');
 }
 
-// Toast-повідомлення про нове досягнення
 function showAchievementToast(ach) {
     const existing = document.querySelector('.achievement-toast');
     if (existing) existing.remove();
@@ -1506,9 +1337,6 @@ function showAchievementToast(ach) {
     }, 3500);
 }
 
-// ============================================================
-// КОНФЕТІ
-// ============================================================
 function spawnConfetti() {
     const colors = ['#ffd700','#0088cc','#4caf50','#ff5722','#e91e63','#9c27b0'];
     for (let i = 0; i < 60; i++) {
@@ -1526,9 +1354,6 @@ function spawnConfetti() {
     }
 }
 
-// ============================================================
-// ПОДІЛИТИСЬ
-// ============================================================
 function shareResult(score, total, points, quizName) {
     const percent = Math.round(score / total * 100);
     const stars = percent === 100 ? '⭐⭐⭐' : percent >= 60 ? '⭐⭐' : '⭐';
@@ -1599,7 +1424,6 @@ function shareResult(score, total, points, quizName) {
     const user = tg.initDataUnsafe?.user;
     const wrongAnswers = currentQuizData.length - score;
 
-    // 1. ПЕРЕВІРКА НА АРХІВ
     if (isArchiveView) {
         const gamePage = document.getElementById('game-page');
         gamePage.innerHTML = `
@@ -1616,7 +1440,6 @@ function shareResult(score, total, points, quizName) {
         return;
     }
 
-    // 2. ЛОГІКА ДЛЯ ЗВИЧАЙНИХ КВІЗІВ
     let updatedTotal = 0, updatedQuizCount = 0, userRank = 0;
     if (user) {
         try {
@@ -1654,14 +1477,12 @@ function shareResult(score, total, points, quizName) {
                     score_text: scoreText
                 }, { onConflict: 'user_id, quiz_id' });
 
-            // Підраховуємо кількість пройдених квізів
             const { count: qCount } = await _supabase
                 .from('completed_quizzes')
                 .select('*', { count: 'exact', head: true })
                 .eq('user_id', user.id);
             updatedQuizCount = qCount || 0;
 
-            // Отримуємо рейтингове місце
             const { count: rankCount } = await _supabase
                 .from('players')
                 .select('*', { count: 'exact', head: true })
@@ -1673,10 +1494,8 @@ function shareResult(score, total, points, quizName) {
         }
     }
 
-    // 3. ПЕРЕВІРКА ДОСЯГНЕНЬ
     const hadPerfect = score === currentQuizData.length;
 
-    // Отримуємо рейтинг з бонусів
     let userRating = 0, rankRating = 0;
     if (user) {
         try {
@@ -1699,15 +1518,12 @@ function shareResult(score, total, points, quizName) {
         sharedCard: false
     };
     const newAchs = checkAchievements(statsForAch);
-    // Показуємо тости по черзі
     newAchs.forEach((ach, i) => {
         setTimeout(() => showAchievementToast(ach), i * 4000);
     });
 
-    // Якщо ідеальний результат — конфеті при фіналі теж
     if (hadPerfect) { spawnConfetti(); spawnStars(); }
 
-    // 4. ВІДОБРАЖЕННЯ ФІНАЛУ
     const emoji = hadPerfect ? '🏆' : score >= currentQuizData.length / 2 ? '🏁' : '😅';
     const gamePage = document.getElementById('game-page');
     gamePage.innerHTML = `
@@ -1722,7 +1538,6 @@ function shareResult(score, total, points, quizName) {
             </button>
         </div>
     `;
-    // Анімація рахунку з затримкою
     setTimeout(() => {
         const el = document.getElementById('finish-points');
         if (el) { el.classList.add('score-animated'); animateCount(el, newPoints); }
@@ -1731,33 +1546,25 @@ function shareResult(score, total, points, quizName) {
 function playQuizMusic(url) {
     const vinyl = document.getElementById('vinyl-element');
     
-    // Якщо музика вже грає — зупиняємо її при повторному натисканні
     if (currentAudio && !currentAudio.paused) {
         currentAudio.pause();
         if(vinyl) vinyl.classList.remove('vinyl-playing');
         return;
     }
 
-    // Створюємо новий об'єкт Audio, якщо посилання змінилося або його ще немає
     if (!currentAudio || currentAudio.src !== url) {
         currentAudio = new Audio(url);
     }
     
-    // Запускаємо відтворення
     currentAudio.play().catch(e => console.error("Помилка відтворення:", e));
     
-    // Додаємо клас анімації обертання
     if(vinyl) vinyl.classList.add('vinyl-playing');
 
-    // Зупиняємо обертання, коли музика закінчиться
     currentAudio.onended = () => {
         if(vinyl) vinyl.classList.remove('vinyl-playing');
     };
 }
 
-// ============================================================
-// ЗІРКИ / ІСКРИ при 100% результаті
-// ============================================================
 function spawnStars() {
     const emojis = ['⭐','✨','🌟','💫','⚡'];
     const cx = window.innerWidth / 2;
@@ -1782,9 +1589,6 @@ function spawnStars() {
     }
 }
 
-// ============================================================
-// АНІМАЦІЯ ЛІЧИЛЬНИКА БАЛІВ
-// ============================================================
 function animateCount(el, target) {
     const duration = 800;
     const start = performance.now();
@@ -1799,9 +1603,6 @@ function animateCount(el, target) {
     requestAnimationFrame(step);
 }
 
-// ============================================================
-// ПРОФІЛЬНА КАРТКА
-// ============================================================
 function showProfileCard() {
     const username = window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Гравець';
     const total    = document.getElementById('p-total')?.innerText   || '0';
@@ -1812,11 +1613,9 @@ function showProfileCard() {
     const saved    = getLocalAchievements();
     const achCount = ACHIEVEMENTS.filter(a => saved[a.id]).length;
 
-    // Досягнення "Поділитися статистикою"
     const newAchs = checkAchievements({ sharedCard: true });
     newAchs.forEach((ach, i) => setTimeout(() => showAchievementToast(ach), 1500 + i * 4000));
 
-    // Видаляємо старий якщо є
     document.getElementById('profile-card-overlay')?.remove();
 
     const colors = ['rgba(0,136,204,0.5)','rgba(255,215,0,0.4)','rgba(255,95,109,0.4)','rgba(76,175,80,0.4)'];
@@ -1891,16 +1690,8 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ============================================================
-
-// ============================================================
-// БОНУСИ — РЕЙТИНГОВА СИСТЕМА
-// ============================================================
-
-// ⬇️ СЮДИ ВСТАВ посилання на таблицю з промокодами (CSV)
 const SHEET_PROMOS = APPS_SCRIPT_URL + '?sheet=' + encodeURIComponent('Промокоди');
 
-// Кеш промокодів щоб не завантажувати щоразу
 let _promoCacheData = null;
 
 async function loadPromoCodes() {
@@ -1912,7 +1703,6 @@ async function loadPromoCodes() {
         
         const result = {};
         
-        // jsonData виглядає як [{name: "PROMO1", content: "100", desc: "Опис"}, ...]
         jsonData.forEach(item => {
             const code = item.name.toUpperCase();
             const reward = parseInt(item.content);
@@ -1936,7 +1726,6 @@ const TASKS = {
     invite:  { reward: 150 },
 };
 
-// --- Supabase helpers для ratings ---
 async function getRating(userId) {
     const { data } = await _supabase
         .from('ratings')
@@ -1963,7 +1752,6 @@ async function openBonusPage() {
     if (!user) return;
 
     try {
-        // Тільки свій рейтинг — без завантаження всього списку
         const { data: top } = await _supabase
             .from('ratings')
             .select('user_id, rating')
@@ -2038,7 +1826,7 @@ function updateDailyBonusBtn(lastDailyTs) {
     const btn   = document.getElementById('daily-bonus-btn');
     if (!badge || !sub || !btn) return;
 
-    if (!lastDailyTs) return; // ще не брав — кнопка активна
+    if (!lastDailyTs) return; 
 
     const last = new Date(lastDailyTs);
     const now  = new Date();
@@ -2054,8 +1842,6 @@ function updateDailyBonusBtn(lastDailyTs) {
         btn.style.opacity = '0.6';
         sub.innerText = 'Наступний бонус через ' + h + 'г ' + m + 'хв';
     } else {
-        // Минуло 24+ годин — повертаємо кнопку в активний стан
-        // (раніше цієї гілки не було, і кнопка лишалась заблокованою назавжди)
         badge.innerText = 'ЗАБРАТИ';
         badge.style.background = '#4caf50';
         btn.style.pointerEvents = 'auto';
@@ -2087,7 +1873,6 @@ async function claimDailyBonus() {
     openBonusPage();
 }
 
-// --- ПРОМОКОДИ ---
 function openPromoPage() { showPage('promo'); document.getElementById('promo-result').innerText = ''; }
 
 async function submitPromo() {
@@ -2127,10 +1912,9 @@ async function submitPromo() {
     tg.HapticFeedback.notificationOccurred('success');
     resultEl.innerHTML = `<span style="color:#4caf50;">✅ ${promo.label} додано!</span>`;
     document.getElementById('promo-input').value = '';
-    _promoCacheData = null; // скидаємо кеш
+    _promoCacheData = null; 
 }
 
-// --- РЕФЕРАЛЬНА СИСТЕМА ---
 function openReferralPage() {
     showPage('referral');
     const user = tg.initDataUnsafe?.user;
@@ -2139,7 +1923,6 @@ function openReferralPage() {
     const refLink = `https://t.me/shadenews_bot?start=ref_${user.id}`;
     document.getElementById('ref-link-box').innerText = refLink;
 
-    // Кількість запрошених
     _supabase.from('ratings')
         .select('user_id', { count: 'exact', head: true })
         .eq('referred_by', user.id)
@@ -2169,7 +1952,6 @@ ${link}`;
     try { tg.shareURL(link, text); } catch(e) { tg.showAlert(text); }
 }
 
-// --- ЗАВДАННЯ ---
 async function claimTask(taskId) {
     const user = tg.initDataUnsafe?.user;
     if (!user) return tg.showAlert('Зайди через бота!');
@@ -2177,7 +1959,6 @@ async function claimTask(taskId) {
     const ratingData = await getRating(user.id);
     const done = ratingData?.tasks_done || [];
 
-    // Вже виконано — нічого не робимо
     if (done.includes(taskId)) {
         tg.showAlert('✅ Завдання вже виконано!');
         return;
@@ -2186,10 +1967,8 @@ async function claimTask(taskId) {
     if (taskId === 'channel') {
         const badge = document.getElementById('task-channel-badge');
 
-        // Крок 1: відкриваємо канал (не закриває Mini App)
         tg.openTelegramLink('https://t.me/sh4denews');
 
-        // Крок 2: змінюємо кнопку на "Перевірити"
         if (badge) {
             badge.innerText = 'ПЕРЕВІРИТИ';
             badge.style.background = '#0088cc';
@@ -2204,7 +1983,6 @@ async function checkChannelSubscription(user, done) {
     if (badge) { badge.innerText = '...'; badge.style.background = '#555'; }
 
     try {
-        // Перевіряємо підписку через Supabase Edge Function або бота
         const res = await fetch(`https://mdkupzrojmulqernsspo.supabase.co/functions/v1/check-subscription`, {
             method: 'POST',
             headers: {
@@ -2216,7 +1994,6 @@ async function checkChannelSubscription(user, done) {
         const result = await res.json();
 
         if (result.subscribed) {
-            // Підписаний — нараховуємо рейтинг
             const reward = TASKS.channel.reward;
             const newRating = await addRating(user.id, user.username || user.first_name || 'Гравець', reward);
             await _supabase.from('ratings').upsert({
@@ -2232,7 +2009,6 @@ async function checkChannelSubscription(user, done) {
             tg.showAlert(`🎉 +${reward} рейтингу за підписку!`);
             openBonusPage();
         } else {
-            // Не підписаний
             tg.HapticFeedback.notificationOccurred('error');
             if (badge) { badge.innerText = 'ПЕРЕВІРИТИ'; badge.style.background = '#0088cc'; }
             tg.showAlert('❌ Ти ще не підписаний на @sh4denews. Підпишись і натисни "Перевірити"!');
@@ -2244,11 +2020,9 @@ async function checkChannelSubscription(user, done) {
     }
 }
 
-// PULL-TO-REFRESH для сторінки quiz-list
-// ============================================================
 (function() {
-    const THRESHOLD = 70;   // px — скільки треба потягнути щоб спрацювало
-    const MAX_PULL   = 100;  // px — максимальна відстань тягнення
+    const THRESHOLD = 70;   
+    const MAX_PULL   = 100;  
 
     let startY = 0, currentY = 0, pulling = false;
 
@@ -2258,7 +2032,7 @@ async function checkChannelSubscription(user, done) {
     function onTouchStart(e) {
         const page = getPage();
         if (!page || !page.classList.contains('active')) return;
-        if (page.scrollTop > 0) return; // тільки якщо вгорі
+        if (page.scrollTop > 0) return; 
         startY = e.touches[0].clientY;
         pulling = true;
     }
@@ -2297,13 +2071,11 @@ async function checkChannelSubscription(user, done) {
         const indicator = getIndicator();
 
         if (delta >= THRESHOLD) {
-            // Запускаємо оновлення
             indicator.classList.remove('ptr-ready');
             indicator.classList.add('ptr-loading');
             indicator.style.opacity = '1';
             indicator.style.transform = 'translateX(-50%) translateY(20px)';
 
-            // Перезавантажуємо поточний список
             if (window._lastSheetUrl && window._lastSheetTitle !== undefined) {
                 loadQuizzesFromSheet(window._lastSheetUrl, window._lastSheetTitle, window._lastArchiveMode || false)
                     .finally(() => resetIndicator(indicator));
@@ -2345,7 +2117,7 @@ function updateChart(correct, wrong) {
         data: {
             labels: ['Правильно', 'Неправильно'],
             datasets: [{
-                data: [correct || 1, wrong || 0], // Щоб не був пустим при 0
+                data: [correct || 1, wrong || 0], 
                 backgroundColor: ['#4caf50', '#f44336'],
                 borderWidth: 0,
                 cutout: '80%'
