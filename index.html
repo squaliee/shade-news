@@ -200,13 +200,20 @@
         }
 
         /* ===== TOAST-ПОВІДОМЛЕННЯ ПРО НОВЕ ДОСЯГНЕННЯ ===== */
-        @keyframes toastIn  { from { transform: translate(-50%, 30px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-        @keyframes toastOut { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -10px); } }
+        @keyframes toastIn  { from { transform: translate(-50%, 40px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes toastOut { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 20px); } }
         .achievement-toast {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, 0); background: linear-gradient(135deg, #1e1e1e, #2a2a2a);
-            border: 1px solid #ffd700; border-radius: 20px; padding: 16px 20px; display: flex; align-items: center; gap: 14px;
-            z-index: 5000; box-shadow: 0 12px 40px rgba(0,0,0,0.7); animation: toastIn 0.4s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+            position: fixed; bottom: 90px; left: 50%; transform: translate(-50%, 0); 
+            background: rgba(30, 30, 30, 0.75); backdrop-filter: blur(15px);
+            border: none; border-radius: 20px; padding: 16px 20px; display: flex; align-items: center; gap: 14px;
+            z-index: 5000; overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 -30px 30px -30px rgba(255, 215, 0, 0.3);
+            animation: toastIn 0.4s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
             width: calc(100vw - 48px); max-width: 340px;
+        }
+        .achievement-toast::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255,215,0,0.8), transparent);
         }
         .achievement-toast.hide { animation: toastOut 0.3s ease forwards; }
 
