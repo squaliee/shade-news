@@ -85,6 +85,8 @@ REP_COOLDOWN_HOURS = 24
 # Пам'ять для вже відправлених роздач (скидається при перезапуску бота, 
 # пізніше можна буде перенести в Supabase)
 SEEN_DEALS = set()
+# Пам'ять для знайдених розпродажів
+SEEN_SALES = set()
 
 # ==================================================
 # 2. Supabase — потрібні таблиці
@@ -400,6 +402,81 @@ async def command_test_news_handler(message: Message) -> None:
         logging.error(f"Test news error: {e}")
 
 # ==================================================
+# 6.6. ТЕСТОВА КОМАНДА ДЛЯ STEAM РОЗПРОДАЖІВ
+# ==================================================
+@dp.message(Command("test_sale"))
+async def command_test_sale_handler(message: Message) -> None:
+    user_id = message.from_user.id
+    if user_id not in ADMIN_IDS:
+        await message.answer("⚠️ Ця команда тільки для адміністраторів.")
+        return
+
+    await message.answer("🔄 Шукаю випадковий розпродаж у Steam...")
+    
+    api_url = "https://store.steampowered.com/api/featuredcategories/?l=ukrainian"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url) as response:
+                if response.status != 200:
+                    await message.answer("❌ Помилка доступу до Steam API.")
+                    return
+                
+                data = await response.json()
+                specials = data.get("specials", {}).get("items", [])
+                
+                if not specials:
+                    await message.answer("❌ Не знайдено активних розпродажів у Steam Specials.")
+                    return
+                    
+                # Обираємо випадковий розпродаж зі списку
+                item = random.choice(specials)
+                item_id = str(item.get("id"))
+                
+                # Обробка заголовка (щоб не був повністю великими літерами)
+                raw_title = item.get("name", "Розпродаж")
+                title = raw_title.capitalize() if raw_title.isupper() else raw_title
+                
+                discount = item.get("discount_percent", 0)
+                image_url = item.get("large_capsule_image") or item.get("header_image", "")
+                item_type = item.get("type", 0) # 0 - гра, 1 - бандл
+                
+                source_url = f"https://store.steampowered.com/app/{item_id}/" if item_type == 0 else f"https://store.steampowered.com/sub/{item_id}/"
+                
+                desc = ""
+                if item_type == 0:
+                    details_url = f"https://store.steampowered.com/api/appdetails?appids={item_id}&l=ukrainian"
+                    try:
+                        async with session.get(details_url) as det_resp:
+                            if det_resp.status == 200:
+                                det_data = await det_resp.json()
+                                if det_data and det_data.get(item_id, {}).get("success"):
+                                    raw_desc = det_data[item_id]["data"].get("short_description", "")
+                                    # Очищаємо від HTML
+                                    desc = re.sub(r'<[^>]+>', '', raw_desc)
+                    except Exception:
+                        pass
+                
+                premium_emoji = get_premium_emoji_html("РОЗПРОДАЖ")
+                
+                text = f"Знижка: <b>-{discount}%</b>"
+                if desc:
+                    text += f"\n\n{desc}"
+                    
+                await send_to_moderation(
+                    bot=message.bot,
+                    title=title,
+                    text=text,
+                    image_url=image_url,
+                    source_url=source_url,
+                    emoji=premium_emoji
+                )
+                
+    except Exception as e:
+        await message.answer(f"❌ Помилка під час пошуку розпродажу: {e}")
+        logging.error(f"Test sale error: {e}")
+
+# ==================================================
 # 7. Репутація в чатах: + / - у відповідь на повідомлення
 # ==================================================
 REP_TRIGGERS_UP = {"+", "+1", "👍"}
@@ -705,6 +782,83 @@ async def track_rss_news(bot: Bot) -> None:
         await asyncio.sleep(3600)
 
 # ==================================================
+# 8.8. Автоматичний пошук розпродажів (Steam API)
+# ==================================================
+async def track_steam_sales(bot: Bot) -> None:
+    """Фонова задача для пошуку розпродажів через Steam Featured API."""
+    # Параметр l=ukrainian дозволяє отримувати описи відразу українською
+    api_url = "https://store.steampowered.com/api/featuredcategories/?l=ukrainian"
+    
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        # Отримуємо секцію "Спеціальні пропозиції" (топ розпродажі)
+                        specials = data.get("specials", {}).get("items", [])
+                        
+                        for item in specials:
+                            item_id = str(item.get("id"))
+                            
+                            if item_id not in SEEN_SALES:
+                                SEEN_SALES.add(item_id)
+                                
+                                # Отримуємо назву та перевіряємо, щоб не була написана лише ВЕЛИКИМИ ЛІТЕРАМИ
+                                raw_title = item.get("name", "Розпродаж")
+                                title = raw_title.capitalize() if raw_title.isupper() else raw_title
+                                
+                                discount = item.get("discount_percent", 0)
+                                if discount == 0:
+                                    continue  # Ігноруємо позиції без знижки
+                                    
+                                image_url = item.get("large_capsule_image") or item.get("header_image", "")
+                                item_type = item.get("type", 0) # 0 - гра, 1 - бандл
+                                
+                                source_url = f"https://store.steampowered.com/app/{item_id}/" if item_type == 0 else f"https://store.steampowered.com/sub/{item_id}/"
+                                
+                                # Спробуємо отримати опис зі сторінки гри
+                                desc = ""
+                                if item_type == 0:
+                                    details_url = f"https://store.steampowered.com/api/appdetails?appids={item_id}&l=ukrainian"
+                                    try:
+                                        async with session.get(details_url) as det_resp:
+                                            if det_resp.status == 200:
+                                                det_data = await det_resp.json()
+                                                if det_data and det_data.get(item_id, {}).get("success"):
+                                                    raw_desc = det_data[item_id]["data"].get("short_description", "")
+                                                    # Очищаємо опис від HTML-тегів (напр. <br>, <b>)
+                                                    desc = re.sub(r'<[^>]+>', '', raw_desc)
+                                    except Exception:
+                                        pass
+                                
+                                # Витягуємо рандомний преміум-емодзі з категорії РОЗПРОДАЖ
+                                premium_emoji = get_premium_emoji_html("РОЗПРОДАЖ")
+                                
+                                # Формуємо текст
+                                text = f"Знижка: <b>-{discount}%</b>"
+                                if desc:
+                                    text += f"\n\n{desc}"
+                                    
+                                await send_to_moderation(
+                                    bot=bot,
+                                    title=title,
+                                    text=text,
+                                    image_url=image_url,
+                                    source_url=source_url,
+                                    emoji=premium_emoji
+                                )
+                                
+                                # Захисна пауза між відправкою повідомлень адміну
+                                await asyncio.sleep(5)
+        except Exception as e:
+            logging.error(f"Помилка парсингу розпродажів Steam: {e}")
+        
+        # Перевіряємо новинки розпродажів раз на 2 години (7200 секунд)
+        # Для тесту можеш поставити await asyncio.sleep(15)
+        await asyncio.sleep(7200)
+
+# ==================================================
 # 9. Обробник постів з каналу — автозбереження новин у Supabase
 # ==================================================
 @dp.channel_post(F.chat.username == TARGET_CHANNEL_USERNAME)
@@ -758,7 +912,7 @@ async def main() -> None:
         
         # Запускаємо фонові таски
         asyncio.create_task(track_steam_freebies(bot))
-        asyncio.create_task(track_rss_news(bot))
+        asyncio.create_task(track_steam_sales(bot))
         
         await dp.start_polling(bot)
     finally:
