@@ -1,2 +1,5 @@
 aiogram>=3.0.0
 supabase>=2.0.0
+aiohttp
+feedparser
+google-generativeai
