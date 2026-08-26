@@ -146,6 +146,7 @@
         /* ===== ІНШЕ (Overlay, Confetti, Share) ===== */
         #loading-overlay { position: fixed; inset: 0; background: rgba(26,26,26,0.9); backdrop-filter: blur(10px); z-index: 1000; display: none; flex-direction: column; justify-content: center; align-items: center; }
         .loader-spin { width: 48px; height: 48px; border: 3px solid rgba(255, 255, 255, 0.1); border-top: 3px solid white; border-radius: 50%; animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; margin-bottom: 16px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         @keyframes confettiFall { 0% { transform: translateY(-10px) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
         .confetti-piece { position: fixed; width: 10px; height: 10px; border-radius: 2px; pointer-events: none; z-index: 9999; animation: confettiFall linear forwards; }
@@ -184,7 +185,10 @@
         .ptr-indicator .material-icons-round { font-size: 24px; color: white; transition: transform 0.2s ease; }
         .ptr-indicator.ptr-visible { opacity: 1; transform: translateX(-50%) translateY(0px); }
         @keyframes ptrSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .ptr-indicator.ptr-loading .material-icons-round { animation: ptrSpin 0.7s linear infinite; }
+        .ptr-indicator.ptr-loading .material-icons-round { 
+            animation: ptrSpin 0.7s linear infinite !important; 
+            transform-origin: center center;
+        }
         
         @keyframes scorePopIn { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
         .score-animated { animation: scorePopIn 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
@@ -685,10 +689,12 @@ async function switchTopTab(type) {
             }).join('');
 
             container.querySelectorAll('.top-row-clickable').forEach(row => {
-                row.addEventListener('click', () => {
-                    openPlayerProfile(row.dataset.userId, row.dataset.username, parseInt(row.dataset.rank, 10));
-                });
-            });
+                        row.addEventListener('click', () => {
+                            // Отримуємо ID як рядок, щоб уникнути помилок конвертації типів
+                            const uId = String(row.getAttribute('data-user-id'));
+                            openPlayerProfile(uId, row.dataset.username, parseInt(row.dataset.rank, 10));
+                        });
+                    });
         } else {
             container.innerHTML = `<div style="padding:40px; color:#666; text-align:center;">Рейтинг порожній</div>`;
         }
@@ -1247,7 +1253,9 @@ function showAchievementToast(ach) {
             <div style="font-size:0.95rem; font-weight:800; color:white; margin:2px 0;">${ach.title}</div>
             <div style="font-size:0.75rem; color:var(--text-muted);">${ach.desc}</div>
         </div>`;
-    document.body.appendChild(el);
+    // Додаємо тост не в body, а в активну сторінку, щоб він гарантовано був поверх неї
+    const activePage = document.querySelector('.page.active') || document.body;
+    activePage.appendChild(el);
     setTimeout(() => {
         el.classList.add('hide');
         setTimeout(() => el.remove(), 400);
@@ -1982,6 +1990,9 @@ async function checkChannelSubscription(user, done) {
             indicator.classList.add('ptr-loading');
             indicator.style.opacity = '1';
             indicator.style.transform = 'translateX(-50%) translateY(20px)';
+            
+            /* Очищаємо залишковий стиль після дотику, щоб запрацювала анімація */
+            indicator.querySelector('.material-icons-round').style.transform = '';
 
             if (window._lastSheetUrl && window._lastSheetTitle !== undefined) {
                 loadQuizzesFromSheet(window._lastSheetUrl, window._lastSheetTitle, window._lastArchiveMode || false)
@@ -2001,6 +2012,9 @@ async function checkChannelSubscription(user, done) {
         indicator.style.transition = 'opacity 0.3s, transform 0.3s';
         indicator.style.opacity = '0';
         indicator.style.transform = 'translateX(-50%) translateY(-60px)';
+        
+        indicator.querySelector('.material-icons-round').style.transform = '';
+        
         setTimeout(() => { indicator.style.transition = ''; }, 350);
     }
 
