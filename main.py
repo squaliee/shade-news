@@ -72,14 +72,12 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e
 TARGET_CHANNEL_USERNAME = "sh4denews"
 
 # --- НАЛАШТУВАННЯ ПІДТРИМКИ ТА АДМІНІВ ---
-# Встав сюди СВІЙ числовий Telegram ID (дізнатись можна в бота @userinfobot).
-# Можна кілька через кому: "111111,222222"
-ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x.isdigit()}
+# Впиши сюди ID своїх акаунтів через кому
+# Щоб дізнатися ID, напиши боту @userinfobot зі свого акаунта
+ADMIN_IDS = {2005493244, 1733525891} # ЗАМІНИ ЦІ ЦИФРИ НА СВОЇ ID
 
-# Куди форвардяться звернення з /support — особистий чат адміна або окремий чат/група.
-# Якщо не задано окремо — беремо перший ID з ADMIN_IDS.
-_admin_chat_env = os.getenv("ADMIN_CHAT_ID", "")
-ADMIN_CHAT_ID = int(_admin_chat_env) if _admin_chat_env.isdigit() else (next(iter(ADMIN_IDS), None))
+# Бот надсилатиме новини на модерацію першому ID зі списку вище
+ADMIN_CHAT_ID = list(ADMIN_IDS)[0] if ADMIN_IDS else None
 
 # Раз на скільки годин один юзер може ставити +/- іншому
 REP_COOLDOWN_HOURS = 24
