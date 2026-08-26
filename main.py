@@ -1,8 +1,32 @@
 import asyncio
+import feedparser
+import google.generativeai as genai
 import logging
 import os
 import re
 import sys
+import aiohttp
+import random
+
+PREMIUM_EMOJIS = {
+    "НОВИНИ": ["5456280556817908274", "5456282880395217853", "5456315517851697919", "5456643064942590685"],
+    "ЗНИЖКИ": ["5456119894976268551", "5456162655670666163", "5456565583732572939", "5456428789024198626"],
+    "ЗАДАРМА": ["5456238380239060735", "5456532873261649210", "5458693671308264096", "5456601515428973512"],
+    "ТРЕЙЛЕР": ["5458913638058329359", "5458465943552297666", "5458817886057433325", "5458775971471592493"],
+    "РОЗІГРАШ": ["5458526274957905235", "5456169884100625291", "5458567042787477904", "5474257030766167294"],
+    "РОЗПРОДАЖ": ["5471887407114651512", "5472380271791737851", "5472264608322455873", "5474252946252265047"],
+    "TWITCH DROPS": ["5239989336685971108", "5239952666255195817", "5240454992745234863", "5239955741451782176"],
+    "ЦІКАВО": ["5384360676611362833", "5384296552749633237", "5384388426395060360", "5384532080166210905"]
+}
+
+def get_premium_emoji_html(category: str) -> str:
+    """Обирає випадковий емодзі з категорії та формує HTML-тег."""
+    cat = category.upper()
+    if cat not in PREMIUM_EMOJIS:
+        cat = "НОВИНИ" # Категорія за замовчуванням
+    
+    emoji_id = random.choice(PREMIUM_EMOJIS[cat])
+    return f'<tg-emoji emoji_id="{emoji_id}">👾</tg-emoji>'
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Bot, Dispatcher, F, html
@@ -17,12 +41,26 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
     WebAppInfo,
+    CallbackQuery,
 )
 from supabase import Client, create_client
 
 # ==================================================
 # 1. Конфігурація та змінні середовища
 # ==================================================
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ТВІЙ_КЛЮЧ_GEMINI_ТУТ")
+
+# Налаштовуємо клієнт Gemini
+if GEMINI_API_KEY and GEMINI_API_KEY != "ТВІЙ_КЛЮЧ_GEMINI_ТУТ":
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    gemini_model = None
+    logging.warning("Gemini API ключ не налаштовано!")
+
+# Пам'ять для новин, щоб уникнути дублікатів
+SEEN_NEWS = set()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8415128660:AAF0pcIL3w5Qkj8MsYLKqZpfDy3UvHKCh94")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://shade-news-app.vercel.app/")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "shadenews_bot")  # без "@", потрібно для реф. посилань
@@ -45,6 +83,10 @@ ADMIN_CHAT_ID = int(_admin_chat_env) if _admin_chat_env.isdigit() else (next(ite
 
 # Раз на скільки годин один юзер може ставити +/- іншому
 REP_COOLDOWN_HOURS = 24
+
+# Пам'ять для вже відправлених роздач (скидається при перезапуску бота, 
+# пізніше можна буде перенести в Supabase)
+SEEN_DEALS = set()
 
 # ==================================================
 # 2. Supabase — потрібні таблиці
@@ -417,6 +459,197 @@ async def command_stats_handler(message: Message) -> None:
         logging.error(f"Помилка /stats: {e}")
         await message.answer("⚠️ Не вдалось отримати статистику. Перевір, чи не призупинений Supabase.")
 
+# ==================================================
+# 8.5. Модерація новин та розпродажів
+# ==================================================
+async def send_to_moderation(bot: Bot, title: str, text: str, image_url: str, source_url: str, emoji: str = "🎮") -> None:
+    """Функція формує чернетку для адміна. Її буде викликати наш майбутній парсер Steam/Новин."""
+    if not ADMIN_CHAT_ID:
+        logging.error("Немає ADMIN_CHAT_ID для відправки на модерацію.")
+        return
+
+    # Якщо маєш преміум-емодзі (emoji_id), заміни змінну emoji на HTML-тег <tg-emoji emoji_id="...">...</tg-emoji>
+    caption = (
+        f"{emoji} <b>{title}</b>\n\n"
+        f"{text}\n\n"
+        f"🔗 <a href='{source_url}'>Джерело</a>\n"
+        f"#новини #shadenews"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Опублікувати", callback_data="post_approve"),
+                InlineKeyboardButton(text="❌ Відхилити", callback_data="post_reject"),
+            ]
+        ]
+    )
+
+    try:
+        await bot.send_photo(
+            chat_id=ADMIN_CHAT_ID,
+            photo=image_url,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        logging.error(f"Не вдалося відправити пост на модерацію: {e}")
+
+
+@dp.callback_query(F.data == "post_approve")
+async def approve_post(callback: CallbackQuery) -> None:
+    # Беремо назву каналу з існуючої змінної та додаємо @ для відправки
+    channel_id = f"@{TARGET_CHANNEL_USERNAME}" 
+    try:
+        await callback.bot.copy_message(
+            chat_id=channel_id,
+            from_chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+        )
+        # Прибираємо кнопки після успішної публікації
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.answer("✅ Опубліковано в Shade News!")
+    except Exception as e:
+        logging.error(f"Помилка публікації в канал: {e}")
+        await callback.answer("❌ Помилка публікації. Перевір права бота в каналі!", show_alert=True)
+
+
+@dp.callback_query(F.data == "post_reject")
+async def reject_post(callback: CallbackQuery) -> None:
+    # Видаляємо повідомлення з адмін-чату
+    await callback.message.delete()
+    await callback.answer("🗑 Відхилено.")
+
+# ==================================================
+# 8.6. Автоматичний пошук роздач (Steam / CheapShark)
+# ==================================================
+async def track_steam_freebies(bot: Bot) -> None:
+    """Фонова задача, яка перевіряє безкоштовні ігри в Steam."""
+    # storeID=1 (Steam), upperPrice=0 (тільки безкоштовно)
+    api_url = "https://www.cheapshark.com/api/1.0/deals?storeID=1&upperPrice=0"
+    
+    while True:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url) as response:
+                    if response.status == 200:
+                        deals = await response.json()
+                        for deal in deals:
+                            deal_id = deal.get("dealID")
+                            
+                            # Якщо цю гру ми ще не публікували
+                            if deal_id not in SEEN_DEALS:
+                                SEEN_DEALS.add(deal_id)
+                                
+                                title = deal.get("title", "Невідома гра")
+                                normal_price = deal.get("normalPrice", "0.00")
+                                thumb = deal.get("thumb", "https://store.steampowered.com/favicon.ico")
+                                steam_id = deal.get("steamAppID")
+                                
+                                source_url = f"https://store.steampowered.com/app/{steam_id}/" if steam_id else "https://store.steampowered.com/"
+                                
+                                text = (
+                                    f"🔥 <b>ХАЛЯВА В STEAM!</b>\n\n"
+                                    f"Гра <b>{title}</b> зараз абсолютно безкоштовна "
+                                    f"(звичайна ціна: ${normal_price}).\n\n"
+                                    f"Встигни забрати до своєї бібліотеки!"
+                                )
+                                
+                                await send_to_moderation(
+                                    bot=bot,
+                                    title="Нова роздача!",
+                                    text=text,
+                                    image_url=thumb,
+                                    source_url=source_url,
+                                    emoji=get_premium_emoji_html("ЗАДАРМА")
+                                )
+                                
+                                # Пауза між відправкою чернеток адміну, щоб не спамити Telegram API
+                                await asyncio.sleep(3)
+        except Exception as e:
+            logging.error(f"Помилка парсингу CheapShark: {e}")
+        
+        # Засинаємо на 6 годин (21600 секунд) до наступної перевірки
+        await asyncio.sleep(15)
+
+# ==================================================
+# 8.7. Автоматичний парсинг RSS та рерайт через Gemini
+# ==================================================
+async def track_rss_news(bot: Bot) -> None:
+    """Фонова задача, яка перевіряє RSS-стрічки та генерує новини через Gemini."""
+    # Список джерел (можеш додавати свої)
+    rss_feeds = [
+        "https://feeds.ign.com/ign/games-all",
+        # "https://www.pcgamer.com/rss/",
+    ]
+    
+    while True:
+        if gemini_model is None:
+            logging.error("Не можу парсити новини: Gemini не налаштовано.")
+            await asyncio.sleep(15)
+            continue
+
+        for feed_url in rss_feeds:
+            try:
+                # Виконуємо парсинг (feedparser працює синхронно, але для RSS це швидко)
+                feed = feedparser.parse(feed_url)
+                
+                # Беремо 2 найсвіжіші новини з кожного джерела
+                for entry in feed.entries[:2]:
+                    article_link = entry.link
+                    
+                    if article_link not in SEEN_NEWS:
+                        SEEN_NEWS.add(article_link)
+                        
+                        original_title = entry.title
+                        original_summary = entry.get('summary', '')
+                        
+                        # Шукаємо картинку в RSS
+                        image_url = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80"
+                        if 'media_content' in entry and len(entry.media_content) > 0:
+                            image_url = entry.media_content[0]['url']
+                        
+                        prompt = (
+                            f"Проаналізуй новину та зроби рерайт для каналу Shade News.\n"
+                            f"Оригінальний заголовок: {original_title}\n"
+                            f"Текст: {original_summary}\n\n"
+                            f"ЗАВДАННЯ:\n"
+                            f"1. Визнач категорію новини. Обери ОДИН варіант із списку: НОВИНИ, ЗНИЖКИ, ЗАДАРМА, ТРЕЙЛЕР, РОЗІГРАШ, РОЗПРОДАЖ, TWITCH DROPS, ЦІКАВО.\n"
+                            f"2. Напиши цей варіант у першому рядку у форматі [КАТЕГОРІЯ].\n"
+                            f"3. З наступного рядка напиши динамічний рерайт новини українською (1-2 абзаци)."
+                        )
+                        
+                        response = await gemini_model.generate_content_async(prompt)
+                        raw_text = response.text.strip()
+                        
+                        # Парсимо категорію з першого рядка
+                        category_match = re.search(r'\[(.*?)\]', raw_text)
+                        category = category_match.group(1) if category_match else "НОВИНИ"
+                        
+                        # Відрізаємо перший рядок з тегом, залишаючи лише текст новини
+                        clean_text = re.sub(r'\[.*?\]\n*', '', raw_text, count=1).strip()
+                        
+                        # Отримуємо готовий HTML-тег преміум емодзі
+                        premium_emoji = get_premium_emoji_html(category)
+                        
+                        await send_to_moderation(
+                            bot=bot,
+                            title=category.capitalize(),
+                            text=clean_text,
+                            image_url=image_url,
+                            source_url=article_link,
+                            emoji=premium_emoji
+                        )
+                        
+                        # Пауза між запитами до Gemini та Telegram (захист від лімітів)
+                        await asyncio.sleep(10)
+                        
+            except Exception as e:
+                logging.error(f"Помилка парсингу RSS {feed_url}: {e}")
+        
+        # Перевіряємо новини раз на годину (3600 секунд)
+        await asyncio.sleep(3600)
 
 # ==================================================
 # 9. Обробник постів з каналу — автозбереження новин у Supabase
@@ -469,6 +702,11 @@ async def main() -> None:
     logging.info("Starting Shade News Bot...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        
+        # Запускаємо фонові таски
+        asyncio.create_task(track_steam_freebies(bot))
+        asyncio.create_task(track_rss_news(bot))
+        
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
