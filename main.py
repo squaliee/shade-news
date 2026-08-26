@@ -48,10 +48,10 @@ from supabase import Client, create_client
 # ==================================================
 # 1. Конфігурація та змінні середовища
 # ==================================================
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ТВІЙ_КЛЮЧ_GEMINI_ТУТ")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6J-BMO29LvBnJDtt8Ud4Mk7efxMRaHM0VjvUCxmUfJeVA")
 
 # Налаштовуємо клієнт Gemini
-if GEMINI_API_KEY and GEMINI_API_KEY != "ТВІЙ_КЛЮЧ_GEMINI_ТУТ":
+if GEMINI_API_KEY and GEMINI_API_KEY != "AQ.Ab8RN6J-BMO29LvBnJDtt8Ud4Mk7efxMRaHM0VjvUCxmUfJeVA":
     genai.configure(api_key=GEMINI_API_KEY)
     gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 else:
