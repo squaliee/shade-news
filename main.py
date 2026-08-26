@@ -347,6 +347,61 @@ async def admin_reply_handler(message: Message) -> None:
 
 
 # ==================================================
+# 6.5. ТЕСТОВА КОМАНДА ДЛЯ МОДЕРАЦІЇ
+# ==================================================
+@dp.message(Command("test_news"))
+async def command_test_news_handler(message: Message) -> None:
+    user_id = message.from_user.id
+    if user_id not in ADMIN_IDS:
+        await message.answer("⚠️ Ця команда тільки для адміністраторів.")
+        return
+
+    await message.answer("🔄 Запускаю тестову генерацію новини через Gemini...")
+    
+    # Тестові дані (ніби ми спарсили їх з RSS)
+    test_title = "Grand Theft Auto VI release window narrowed down by Take-Two"
+    test_summary = "Take-Two Interactive has officially confirmed that highly anticipated Grand Theft Auto VI is scheduled for release in the Fall of 2025. This narrows down the previous 2025 release window, bringing more clarity to eager fans waiting for the next installment in the massive open-world franchise."
+    test_url = "https://www.ign.com/articles/gta-6-release-window-fall-2025"
+    test_image = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80"
+    
+    if gemini_model is None:
+        await message.answer("❌ Помилка: Gemini API не налаштовано!")
+        return
+
+    try:
+        prompt = (
+            f"Проаналізуй новину та зроби рерайт для каналу Shade News.\n"
+            f"Оригінальний заголовок: {test_title}\n"
+            f"Текст: {test_summary}\n\n"
+            f"ЗАВДАННЯ:\n"
+            f"1. Визнач категорію новини. Обери ОДИН варіант із списку: НОВИНИ, ЗНИЖКИ, ЗАДАРМА, ТРЕЙЛЕР, РОЗІГРАШ, РОЗПРОДАЖ, TWITCH DROPS, ЦІКАВО.\n"
+            f"2. Напиши цей варіант у першому рядку у форматі [КАТЕГОРІЯ].\n"
+            f"3. З наступного рядка напиши динамічний рерайт новини українською (1-2 абзаци)."
+        )
+        
+        response = await gemini_model.generate_content_async(prompt)
+        raw_text = response.text.strip()
+        
+        category_match = re.search(r'\[(.*?)\]', raw_text)
+        category = category_match.group(1) if category_match else "НОВИНИ"
+        clean_text = re.sub(r'\[.*?\]\n*', '', raw_text, count=1).strip()
+        premium_emoji = get_premium_emoji_html(category)
+        
+        # Використовуємо message.bot, щоб передати об'єкт бота
+        await send_to_moderation(
+            bot=message.bot,
+            title=category.capitalize(),
+            text=clean_text,
+            image_url=test_image,
+            source_url=test_url,
+            emoji=premium_emoji
+        )
+        
+    except Exception as e:
+        await message.answer(f"❌ Помилка генерації або відправки: {e}")
+        logging.error(f"Test news error: {e}")
+
+# ==================================================
 # 7. Репутація в чатах: + / - у відповідь на повідомлення
 # ==================================================
 REP_TRIGGERS_UP = {"+", "+1", "👍"}
